@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import Onboarding from './components/onboarding/Onboarding.vue'
-// import Onboarding from './components/onboarding/Onboarding.vue'
-
 const isDark = ref(false)
 
 const toggleTheme = () => {
@@ -22,14 +19,15 @@ onMounted(() => {
 </script>
 
 <template>
+  <router-view />
+
   <!-- ✅ CRITICAL: text-primary here -->
-  <div class="bg-page text-primary min-h-screen p-6 transition-colors duration-300">
-    <Onboarding />
+  <div
+    class="bg-page text-primary min-h-screen p-6 transition-colors duration-300"
+  >
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-primary">
-        PulseChat
-      </h1>
+      <h1 class="text-2xl font-bold text-primary">PulseChat</h1>
 
       <button
         @click="toggleTheme"
@@ -40,20 +38,17 @@ onMounted(() => {
     </div>
 
     <!-- Card -->
-    <div class="bg-surface p-6 rounded-xl shadow border border-base transition-colors duration-300">
-      <h2 class="text-lg font-semibold text-primary mb-2">
-        Chat Preview
-      </h2>
+    <div
+      class="bg-surface p-6 rounded-xl shadow border border-base transition-colors duration-300"
+    >
+      <h2 class="text-lg font-semibold text-primary mb-2">Chat Preview</h2>
 
       <p class="text-secondary mb-4">
         This is how your text will look in both modes.
       </p>
 
       <!-- Fake message -->
-      <div class="bg-accent p-3 rounded-lg w-fit">
-        Hello from PulseChat 🚀
-      </div>
+      <div class="bg-accent p-3 rounded-lg w-fit">Hello from PulseChat 🚀</div>
     </div>
-
   </div>
 </template>

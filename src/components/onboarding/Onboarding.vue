@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 
 const frontStyle = ref({});
 const backStyle = ref({});
 const showText = ref(false);
+const router = useRouter();
 
 // Color stages (matching your images)
 const stages = [
@@ -32,16 +34,19 @@ const applyStage = (stage) => {
 };
 
 onMounted(() => {
-
-  // Each stage ~2.5s + final text
-
   applyStage(stages[0]);
 
   setTimeout(() => applyStage(stages[1]), 2500);
   setTimeout(() => applyStage(stages[2]), 5000);
+
   setTimeout(() => {
     showText.value = true;
   }, 6500);
+
+  // ✅ Navigate after animation + 3 seconds
+  setTimeout(() => {
+    router.push("/onboarding2"); // change to your route
+  }, 9500);
 });
 </script>
 
@@ -49,6 +54,7 @@ onMounted(() => {
   <div
     class="bg-page h-screen flex justify-center items-center overflow-hidden flex-col"
   >
+
     <div class="chat-wrapper">
       <div class="bubble back" :style="backStyle"></div>
       <div class="bubble front" :style="frontStyle"></div>
@@ -63,6 +69,7 @@ onMounted(() => {
   as delicious as thunder!
 </p>
   </div>
+
 </template>
 
 <style scoped>
