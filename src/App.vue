@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import Onboarding from './components/onboarding/Onboarding.vue'
+// import Onboarding from './components/onboarding/Onboarding.vue'
 
 const isDark = ref(false)
 
@@ -22,7 +24,7 @@ onMounted(() => {
 <template>
   <!-- ✅ CRITICAL: text-primary here -->
   <div class="bg-page text-primary min-h-screen p-6 transition-colors duration-300">
-    
+    <Onboarding />
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-primary">
@@ -48,7 +50,7 @@ onMounted(() => {
       </p>
 
       <!-- Fake message -->
-      <div class="bg-accent text-white p-3 rounded-lg w-fit">
+      <div class="bg-accent p-3 rounded-lg w-fit">
         Hello from PulseChat 🚀
       </div>
     </div>

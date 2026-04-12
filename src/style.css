@@ -1,25 +1,26 @@
 @import "tailwindcss";
 
-/* 👇 THIS is required in v4 */
 @theme {
-  --color-page: #C7DFED;
+  /* your variables */
+  --color-page: #FFFFFF;
   --color-surface: #FFFFFF;
-  --color-surface-secondary: #F8FAFC;
-
   --color-text-primary: #000000;
   --color-text-secondary: #6B7280;
-
   --color-border: #E5E7EB;
+
+  /* ✅ ADD THIS */
+  --color-accent: #17A2D8;
+  --color-primary: #091413;
 }
 
-/* Dark mode override */
+/* dark mode */
 .dark {
-  --color-page: #1A2332;
+  --color-page: #292929;
   --color-surface: #2A3A4A;
-  --color-surface-secondary: #1F2A37;
-
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #D1D5DB;
-
   --color-border: #4B5563;
+
+  --color-accent: #3A9AFF;
+  --color-primary: #FFFFFF;
 }
