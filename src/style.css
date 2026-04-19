@@ -2,25 +2,35 @@
 
 @theme {
   /* your variables */
-  --color-page: #FFFFFF;
-  --color-surface: #FFFFFF;
+  --color-page: #ffffff;
+  --color-surface: #ffffff;
   --color-text-primary: #000000;
-  --color-text-secondary: #6B7280;
-  --color-border: #E5E7EB;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
 
-  /* ✅ ADD THIS */
-  --color-accent: #17A2D8;
+  --color-accent: #17a2d8;
   --color-primary: #091413;
+
+  --color-header-from: #0891b2;
+  --color-header-to: #0284c7;
+  --color-wave: #89d4ff;
+  --color-text-auth: #ffffff;
+    --color-form: #09637E;
 }
 
 /* dark mode */
 .dark {
   --color-page: #292929;
-  --color-surface: #2A3A4A;
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #D1D5DB;
-  --color-border: #4B5563;
+  --color-surface: #2a3a4a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-border: #4b5563;
+  --color-accent: #3a9aff;
+  --color-primary: #ffffff;
 
-  --color-accent: #3A9AFF;
-  --color-primary: #FFFFFF;
+  --color-header-from: #1e3a8a;
+  --color-header-to: #1d4ed8;
+  --color-wave: #37353e;
+  --color-text-auth: #44ACFF;
+  --color-form: #ffffff;
 }

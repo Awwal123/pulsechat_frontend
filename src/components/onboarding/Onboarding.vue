@@ -7,7 +7,6 @@ const backStyle = ref({});
 const showText = ref(false);
 const router = useRouter();
 
-// Color stages (matching your images)
 const stages = [
   {
     front: ["#dbe7f0", "#cfd8e3"],
@@ -43,9 +42,8 @@ onMounted(() => {
     showText.value = true;
   }, 6500);
 
-  // ✅ Navigate after animation + 3 seconds
   setTimeout(() => {
-    router.push("/onboarding2"); // change to your route
+    router.push("/onboarding2");
   }, 9500);
 });
 </script>
