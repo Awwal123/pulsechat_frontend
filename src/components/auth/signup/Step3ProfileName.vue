@@ -87,7 +87,8 @@
       <div class="flex justify-end mb-8 w-full">
         <button
           class="bg-[#0891B2] hover:bg-[#0369A1] text-white rounded-full p-4 shadow-lg transition-all active:scale-95"
-        >
+        @click="next"
+          >
           <svg
             class="w-6 h-6"
             fill="none"
@@ -110,6 +111,14 @@
 <script setup lang="ts">
 
 import { ref } from 'vue'
+
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const next = () => {
+  router.push("/pin/setpin")
+}
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const imageUrl = ref<string | null>(null)

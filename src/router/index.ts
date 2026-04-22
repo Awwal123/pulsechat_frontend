@@ -6,6 +6,8 @@ import SplashScreen from "../components/onboarding/SplashScreen.vue";
 import Step1Phone from "../components/auth/signup/Step1Phone.vue";
 import Step3ProfileName from "../components/auth/signup/Step3ProfileName.vue";
 import Step4OTP from "../components/auth/signup/Step4OTP.vue";
+import PINSecurity from "../components/auth/pin/PINSecurity.vue";
+import ChatView from "../components/dashboard/ChatView.vue";
 
 const routes = [
   {
@@ -38,6 +40,16 @@ const routes = [
     path: "/signup/otp",
     name: "Step4OTP",
     component: Step4OTP,
+  },
+  {
+    path: "/pin/setpin",
+    name: "PINSecurity",
+    component: PINSecurity,
+  },
+  {
+    path: "/dashboard/chats",
+    name: "ChatView",
+    component: ChatView,
   },
 ];
 
