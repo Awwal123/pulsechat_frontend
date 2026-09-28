@@ -1,155 +1,123 @@
 <template>
-  <div class="min-h-screen bg-[color:var(--color-page)] flex flex-col">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-[#0891B2] to-[#0284C7] text-white px-6 py-4 flex items-center justify-between gap-4">
+  <div class="flex h-dvh flex-col bg-page">
+    <!-- Header (relative + z-30 so the + dropdown can overlap the page) -->
+    <header
+      class="relative z-30 flex items-center justify-between gap-3 bg-linear-to-br from-header-from to-header-to px-5 py-4 text-white"
+    >
       <div v-if="!showSearchBar" class="flex items-center gap-2">
-        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11z"/>
-        </svg>
-        <span class="text-xl font-bold">E-Chat</span>
+        <img
+          src="../../assets/images/pulsechat-icon-light.svg"
+          alt="Pulse Chat"
+          class="h-8 dark:hidden"
+        />
+        <img
+          src="../../assets/images/pulsechat-icon-dark.svg"
+          alt="Pulse Chat"
+          class="hidden h-8 dark:block"
+        />
       </div>
-      
-      <!-- Search Input in Header -->
+
+      <!-- search pill -->
       <input
-        v-if="showSearchBar"
+        v-else
+        ref="searchInput"
         v-model="searchQuery"
         type="text"
         placeholder="Search"
-        autofocus
-        class="flex-1 bg-white text-[color:var(--color-text-primary)] placeholder-[color:var(--color-text-secondary)] rounded-full px-4 py-2 focus:outline-none"
+        class="h-10 min-w-0 flex-1 rounded-full bg-white px-5 text-[15px] text-slate-800 placeholder-slate-400 outline-none"
       />
-      
-      <div class="flex items-center gap-2 ml-auto">
-        <!-- Search Icon - Hidden when search is active -->
+
+      <div class="ml-auto flex items-center gap-1">
         <button
           v-if="!showSearchBar"
-          @click="toggleSearch"
-          class="hover:bg-white/20 p-2 rounded-full transition-colors"
+          type="button"
+          aria-label="Search"
+          class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-white/10"
+          @click="openSearch"
         >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <MagnifyingGlassIcon class="h-6 w-6" />
         </button>
-        
-        <!-- Close Button - Shown when search is active -->
-        <button
-          v-if="showSearchBar"
-          @click="clearSearch"
-          class="hover:bg-white/20 p-2 rounded-full transition-colors"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        
-        <!-- Plus Button -->
-        <button
-          @click="showActionModal = true"
-          class="hover:bg-white/20 p-2 rounded-full transition-colors"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </div>
-    </div>
 
-    <!-- Page Content -->
+        <button
+          v-else
+          type="button"
+          aria-label="Close search"
+          class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30"
+          @click="closeSearch"
+        >
+          <XMarkIcon class="h-6 w-6" />
+        </button>
+
+        <!-- + button → dropdown: Add Friend / Create Group -->
+        <PlusMenu v-if="!showSearchBar" />
+      </div>
+    </header>
+
+    <!-- Page content -->
     <div class="flex-1 overflow-y-auto">
       <slot />
     </div>
 
-    <!-- Bottom Navigation -->
-    <div class="bg-[color:var(--color-surface)] border-t border-[color:var(--color-border)] px-6 py-4 flex items-center justify-around">
-      <router-link
-        to="/chats"
-        class="flex flex-col items-center gap-2 transition-colors"
-        :class="activeTab === 'chats' ? 'text-[#0891B2]' : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'"
+    <!-- Bottom navigation -->
+    <nav class="flex items-center gap-1 rounded-t-3xl bg-chip p-1.5">
+      <RouterLink
+        v-for="t in tabs"
+        :key="t.id"
+        :to="t.to"
+        class="flex flex-1 flex-col items-center gap-1.5 rounded-2xl py-2.5 text-xs font-medium transition-colors"
+        :class="current === t.id
+          ? 'bg-linear-to-b from-accent to-accent-dark text-white shadow-md'
+          : 'text-text-secondary hover:text-text-primary'"
       >
-        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-        </svg>
-        <span class="text-xs font-medium">Chats</span>
-      </router-link>
-      
-      <router-link
-        to="/groups"
-        class="flex flex-col items-center gap-2 transition-colors"
-        :class="activeTab === 'groups' ? 'text-[#0891B2]' : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'"
-      >
-        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-5-9h10v2H7z"/>
-        </svg>
-        <span class="text-xs font-medium">Groups</span>
-      </router-link>
-      
-      <router-link
-        to="/profile"
-        class="flex flex-col items-center gap-2 transition-colors"
-        :class="activeTab === 'profile' ? 'text-[#0891B2]' : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'"
-      >
-        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-        </svg>
-        <span class="text-xs font-medium">Profile</span>
-      </router-link>
-      
-      <router-link
-        to="/more"
-        class="flex flex-col items-center gap-2 transition-colors"
-        :class="activeTab === 'more' ? 'text-[#0891B2]' : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'"
-      >
-        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-        </svg>
-        <span class="text-xs font-medium">More</span>
-      </router-link>
-    </div>
-
-    <!-- Add Friend / Create Group Modal -->
-    <AddFriendCreateGroupModal v-model="showActionModal" />
+        <component :is="t.icon" class="h-6 w-6" />
+        {{ t.label }}
+      </RouterLink>
+    </nav>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import AddFriendCreateGroupModal from '../../assets/components/AddFriendCreateGroupModal.vue'
+import {
+  Bars3Icon,
+  ChatBubbleOvalLeftEllipsisIcon,
+  MagnifyingGlassIcon,
+  UserCircleIcon,
+  UserGroupIcon,
+  XMarkIcon,
+} from '@heroicons/vue/24/outline'
+import PlusMenu from './PlusMenu.vue';
+import { useSearch } from '../../assets/composables/Usesearch.ts';
 
+
+// optional: views may still pass :activeTab, otherwise it comes from the route
+const props = defineProps<{ activeTab?: string }>()
 const route = useRoute()
+
+const tabs = [
+  { id: 'chats', to: '/chats', label: 'Chats', icon: ChatBubbleOvalLeftEllipsisIcon },
+  { id: 'groups', to: '/groups', label: 'Groups', icon: UserGroupIcon },
+  { id: 'profile', to: '/profile', label: 'Profile', icon: UserCircleIcon },
+  { id: 'more', to: '/more', label: 'More', icon: Bars3Icon },
+]
+const current = computed(
+  () => props.activeTab ?? tabs.find((t) => route.path.startsWith(t.to))?.id ?? 'chats',
+)
+
+/* search: shared with the pages through useSearch() */
+const { query: searchQuery } = useSearch()
+
 const showSearchBar = ref(false)
-const showActionModal = ref(false)
-const searchQuery = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
 
-const activeTab = ref<string>('')
-
-// Determine active tab from current route
-const getActiveTab = () => {
-  const path = route.path
-  if (path.includes('chats')) return 'chats'
-  if (path.includes('groups')) return 'groups'
-  if (path.includes('profile')) return 'profile'
-  if (path.includes('more')) return 'more'
-  return 'chats'
-}
-
-const toggleSearch = () => {
+const openSearch = async () => {
   showSearchBar.value = true
+  await nextTick()
+  searchInput.value?.focus()
 }
-
-const clearSearch = () => {
+const closeSearch = () => {
   showSearchBar.value = false
   searchQuery.value = ''
 }
-
-// Watch route changes to update active tab
-import { watch } from 'vue'
-watch(() => route.path, () => {
-  activeTab.value = getActiveTab()
-}, { immediate: true })
-
-// Expose searchQuery for child components to use
-defineExpose({
-  searchQuery,
-})
 </script>

@@ -14,7 +14,9 @@ import MoreView from "../components/views/MoreView.vue";
 import { usePhone } from "../assets/composables/Usephone.ts";
 import LoginPhone from "../components/auth/signin/LoginPhone.vue";
 import OtpVerify from "../components/auth/signin/OtpVerify.vue";
-
+import AddFriendView from "../components/views/AddFriendView.vue";
+import CreateGroupView from "../components/views/CreateGroupView.vue";
+import Conversationview from "../components/views/Conversationview.vue";
 
 // OTP screens need a valid phone number, the name screen needs a verified OTP
 const requirePhone = () => (usePhone().isValid.value ? true : undefined);
@@ -51,9 +53,12 @@ const routes = [
 
   // ── app ────────────────────────────────────────────────
   { path: "/chats", name: "Chats", component: ChatView },
+ { path: "/chats/:id", name: "Chat", component: Conversationview, props: true },
   { path: "/groups", name: "Groups", component: GroupsView },
   { path: "/profile", name: "Profile", component: ProfileView },
   { path: "/more", name: "More", component: MoreView },
+  { path: "/friends/add", name: "AddFriend", component: AddFriendView },
+  { path: "/groups/create", name: "CreateGroup", component: CreateGroupView },
 ];
 
 const router = createRouter({

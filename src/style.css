@@ -16,14 +16,26 @@
   --color-text-auth: #ffffff;
   --color-form: #09637e;
 
-  /* ── added for the auth screens ── */
-  --color-ink: #23233a;          /* main text + idle underlines */
-  --color-muted: #9a9bb5;        /* (+44), placeholders */
-  --color-accent-dark: #0a9ff0;  /* gradient end for arrow / Continue buttons */
-  --color-pill: #e8f1fb;         /* Register / Login header pill */
+ 
+  --color-ink: #23233a;         
+  --color-muted: #9a9bb5;        
+  --color-accent-dark: #0a9ff0; 
+  --color-pill: #e8f1fb;         
   --color-pill-text: #1e5bbe;
-  --color-pill-soft: #e6f4fd;    /* Skip button */
-  --color-link: #9db3c4;         /* disabled "Resend Code" */
+  --color-pill-soft: #e6f4fd;    
+  --color-link: #9db3c4;         
+
+   
+  --color-chip: #eef2f6;         
+  --color-sheet: #ffffff;        
+  --color-tint: #eaf7ff;         
+  --color-tint-text: #17a2d8;
+  --color-danger: #ef4444;
+  --color-accent-dark: #0a9ff0; 
+
+  --color-chat-bg: #e9eff6;
+  --color-bubble-out: #1a66c9;
+  --color-field: #e5e9ef;
 }
 
 .dark {
@@ -49,4 +61,19 @@
   --color-pill-text: #ffffff;
   --color-pill-soft: #37353e;
   --color-link: #7b8794;
+
+
+
+
+/* ── add to your existing .dark { ... } block ── */
+  --color-chip: #3d3d4b;
+  --color-sheet: #45445a;
+  --color-tint: #eaf7ff;         /* stays light in dark mode, like the design */
+  --color-tint-text: #1fa8f0;
+  --color-danger: #f0525a;
+
+  --color-chat-bg: #2a2b3d;
+  --color-bubble-out: #1a66c9;
+  --color-field: #575757;
 }
+

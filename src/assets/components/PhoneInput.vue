@@ -125,4 +125,4 @@ const handleFlagError = (event: Event) => {
 div {
   transition: opacity 0.2s ease;
 }
-</style>``
+</style>
