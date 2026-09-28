@@ -43,7 +43,7 @@ const router = useRouter()
 const openModal = () => {
   isOpen.value = true
   setTimeout(() => {
-    router.push('/dashboard/chats')
+    router.push('/chats')
   }, 3000)
 }
 

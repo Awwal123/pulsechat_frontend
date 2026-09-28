@@ -1,98 +1,116 @@
 <template>
-  <div class="min-h-screen bg-page flex flex-col">
-    <div class="px-6 flex justify-between pt-6 pb-8">
+  <div class="flex min-h-screen flex-col bg-page">
+    <!-- top bar -->
+    <header class="relative flex items-center justify-center px-4 pt-6">
       <button
-        class="text-primary cursor-pointer hover:opacity-70 transition-opacity mb-6"
+        type="button"
+        aria-label="Go back"
+        class="absolute left-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white text-ink shadow-md transition-transform active:scale-95"
+        @click="router.back()"
       >
-        <ArrowLeftIcon class="w-6 h-6" />
+        <ArrowLeftIcon class="h-5 w-5" />
       </button>
-      <h1 class="text-3xl font-bold text-primary mb-2">PIN Security</h1>
+      <h1 class="text-lg font-bold text-ink">PIN Security</h1>
+    </header>
 
-      <div></div>
-    </div>
-    <p class="text-text-secondary text-center text-sm">
-      Protect your account with a secure PIN
-    </p>
+    <p class="mt-8 text-center text-sm text-ink">Protect your account with a secure PIN</p>
 
-    <div class="flex-1 flex flex-col items-center justify-center px-6">
-      <div class="flex gap-6 mb-20">
+    <!-- pin boxes -->
+    <main class="flex-1 px-4 pt-8">
+      <div class="flex justify-between gap-5">
         <input
-          v-for="(_, index) in pin"
-          :key="index"
-          v-model="pin[index]"
+          v-for="(_, i) in LENGTH"
+          :key="i"
+          :ref="(el) => (inputs[i] = el as HTMLInputElement)"
+          :value="pin[i]"
           type="text"
           inputmode="numeric"
+          autocomplete="one-time-code"
           maxlength="1"
-          placeholder="—"
-          :ref="(el) => pinInputs[index] = el"
-          @input="handlePinInput(index)"
-          @keydown.backspace="handleBackspace(index)"
-          @focus="(e) => (e.target as HTMLInputElement).select()"
-          :class="[
-            'w-12 h-12 text-center text-2xl font-bold border-b-2 bg-transparent text-primary focus:outline-none placeholder-text-secondary transition-colors',
-            pin[index] ? 'border-[#0891B2]' : 'border-border'
-          ]"
+          class="w-full min-w-0 border-0 border-b-2 bg-transparent pb-1 text-center text-[32px] font-medium text-ink caret-transparent outline-none transition-colors"
+          :class="activeIndex === i ? 'border-accent/70' : 'border-ink'"
+          @input="onInput(i, $event)"
+          @keydown="onKeydown(i, $event)"
+          @focus="activeIndex = i"
+          @paste.prevent="onPaste($event)"
         />
       </div>
-    </div>
+    </main>
 
-    <div class="px-6 pb-8 flex items-center justify-between">
+    <!-- actions -->
+    <footer class="flex gap-4 px-4 pb-8">
       <button
-        class="text-[#0891B2] hover:opacity-70 font-semibold transition-opacity"
+        type="button"
+        class="h-[52px] flex-1 cursor-pointer rounded-full bg-pill-soft text-[15px] font-semibold text-accent transition-all active:scale-95"
         @click="showCongratulations"
       >
         Skip
       </button>
       <button
-        class="bg-[#0891B2] hover:bg-[#0369A1] text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-all active:scale-95"
-        @click="showCongratulations"
+        type="button"
+        :disabled="!isComplete"
+        class="h-[52px] flex-1 rounded-full bg-linear-to-b from-accent to-accent-dark text-[15px] font-semibold text-white shadow-md transition-all"
+        :class="isComplete ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-40 shadow-none'"
+        @click="onContinue"
       >
         Continue
       </button>
-    </div>
+    </footer>
+
     <CongratulationsModal ref="modalRef" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ArrowLeftIcon } from '@heroicons/vue/24/outline'
 import CongratulationsModal from '../../../assets/components/CongratulationsModal.vue'
 
+const LENGTH = 4
+const router = useRouter()
 
-
-const pin = ref(['', '', '', ''])
-const pinInputs = ref<any[]>([])
-
+const pin = reactive<string[]>(Array(LENGTH).fill(''))
+const inputs = ref<HTMLInputElement[]>([])
+const activeIndex = ref(0)
 const modalRef = ref<any>(null)
 
-    const showCongratulations = () => {
-  modalRef.value?.openModal()
+const isComplete = computed(() => pin.every((d) => d !== ''))
+
+const focusAt = (i: number) => inputs.value[Math.max(0, Math.min(LENGTH - 1, i))]?.focus()
+
+const onInput = (i: number, e: Event) => {
+  const el = e.target as HTMLInputElement
+  const digit = el.value.replace(/\D/g, '').slice(-1)
+  pin[i] = digit
+  el.value = digit
+  if (digit && i < LENGTH - 1) focusAt(i + 1) // auto-advance
 }
 
-// Handle PIN input with auto-advance
-const handlePinInput = (index: number) => {
-  const value = pin.value[index]
-
-  // Only allow digits
-  pin.value[index] = value.replace(/[^0-9]/g, '').slice(0, 1)
-
-  // Auto-advance to next input
-  if (pin.value[index] && index < 3) {
-    pinInputs.value[index + 1]?.focus()
-  }
+const onKeydown = (i: number, e: KeyboardEvent) => {
+  if (e.key === 'Backspace' && !pin[i] && i > 0) {
+    pin[i - 1] = ''
+    focusAt(i - 1)
+    e.preventDefault()
+  } else if (e.key === 'ArrowLeft') focusAt(i - 1)
+  else if (e.key === 'ArrowRight') focusAt(i + 1)
+  else if (e.key === 'Enter') onContinue()
 }
 
-// Handle backspace to go to previous input
-const handleBackspace = (index: number) => {
-  if (!pin.value[index] && index > 0) {
-    pin.value[index - 1] = ''
-    pinInputs.value[index - 1]?.focus()
-  }
+const onPaste = (e: ClipboardEvent) => {
+  const digits = (e.clipboardData?.getData('text') ?? '').replace(/\D/g, '').slice(0, LENGTH)
+  if (!digits) return
+  digits.split('').forEach((d, idx) => (pin[idx] = d))
+  focusAt(Math.min(digits.length, LENGTH - 1))
 }
 
-onMounted(() => {
-  // Auto-focus first input
-  pinInputs.value[0]?.focus()
-})
+const showCongratulations = () => modalRef.value?.openModal()
+
+const onContinue = () => {
+  if (!isComplete.value) return
+  // TODO: save pin.join('') securely (hash it, don't store it in plain text)
+  showCongratulations()
+}
+
+onMounted(() => focusAt(0))
 </script>

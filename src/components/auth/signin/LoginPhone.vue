@@ -1,5 +1,5 @@
 <template>
-  <PhoneEntry mode="register" @next="router.push('/signup/otp')" />
+  <PhoneEntry mode="login" @next="router.push('/login/otp')" />
 </template>
 
 <script setup lang="ts">

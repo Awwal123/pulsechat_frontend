@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 @theme {
-  /* your variables */
   --color-page: #ffffff;
   --color-surface: #ffffff;
   --color-text-primary: #000000;
@@ -15,10 +14,18 @@
   --color-header-to: #0284c7;
   --color-wave: #89d4ff;
   --color-text-auth: #ffffff;
-    --color-form: #09637E;
+  --color-form: #09637e;
+
+  /* ── added for the auth screens ── */
+  --color-ink: #23233a;          /* main text + idle underlines */
+  --color-muted: #9a9bb5;        /* (+44), placeholders */
+  --color-accent-dark: #0a9ff0;  /* gradient end for arrow / Continue buttons */
+  --color-pill: #e8f1fb;         /* Register / Login header pill */
+  --color-pill-text: #1e5bbe;
+  --color-pill-soft: #e6f4fd;    /* Skip button */
+  --color-link: #9db3c4;         /* disabled "Resend Code" */
 }
 
-/* dark mode */
 .dark {
   --color-page: #292929;
   --color-surface: #2a3a4a;
@@ -31,6 +38,15 @@
   --color-header-from: #1e3a8a;
   --color-header-to: #1d4ed8;
   --color-wave: #37353e;
-  --color-text-auth: #44ACFF;
+  --color-text-auth: #44acff;
   --color-form: #ffffff;
+
+  /* ── added for the auth screens ── */
+  --color-ink: #ffffff;
+  --color-muted: #9ca3af;
+  --color-accent-dark: #1f7be0;
+  --color-pill: #ffffff26;
+  --color-pill-text: #ffffff;
+  --color-pill-soft: #37353e;
+  --color-link: #7b8794;
 }

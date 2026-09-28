@@ -1,139 +1,88 @@
 <template>
-  <div class="min-h-screen bg-page flex flex-col">
-    <div
-      class="bg-linear-to-b flex flex-col from-header-from to-header-to text-white pt-6 pb-20"
-    >
-      <div>
-        <div class="flex items-center justify-between px-6 mb-8">
-          <button
-            class="bg-page hover:bg-white/30 text-primary px-6 py-3 rounded-full flex items-center gap-2 cursor-pointer transition-colors"
-          >
-            ← Login
-          </button>
-          <h1 class="text-3xl text-(--color-text-auth)  font-bold">Register</h1>
-        </div>
-      </div>
-      <div class="flex justify-center">
-        <div class="relative mt-12">
-          <div
-            class="w-32 h-32 rounded-full border-4 border-white shadow-lg bg-[#A0CDEB] flex items-center justify-center overflow-hidden"
-          >
-            <img
-              v-if="imageUrl"
-              :src="imageUrl"
-              class="w-full h-full object-cover"
-            />
+  <div class="flex min-h-screen flex-col bg-page">
+    <AuthHeader mode="register" curved>
+      <!-- avatar -->
+      <div class="mt-3 flex justify-center">
+        <div class="relative h-[120px] w-[120px]">
+          <img v-if="avatarUrl" :src="avatarUrl" alt="Profile photo" class="h-full w-full rounded-full object-cover" />
+          <svg v-else class="h-full w-full" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="60" fill="white" fill-opacity="0.45" />
+            <circle cx="60" cy="46" r="18" fill="white" />
+            <ellipse cx="60" cy="88" rx="33" ry="15" fill="white" />
+          </svg>
 
-            <svg
-              v-else
-              class="w-16 h-16 text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <circle cx="12" cy="8" r="4" />
-              <path d="M12 14c-4 0-6 2-6 4v4h12v-4c0-2-2-4-6-4z" />
-            </svg>
-          </div>
-          <input
-            type="file"
-            ref="fileInput"
-            accept="image/*"
-            class="hidden"
-            @change="handleFileChange"
-          />
           <button
-            @click="handleEditClick"
-            class="absolute top-2 right-1 bg-[#0891B2] text-white rounded-full p-2 shadow-lg hover:bg-[#0369A1] transition-colors"
+            type="button"
+            aria-label="Edit photo"
+            class="absolute top-0 right-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[#0f4fa8] text-white transition-transform active:scale-95"
+            @click="fileInput?.click()"
           >
-            <svg
-              class="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-              />
+            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L18.4 9.35l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.33-2.33a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.82-1.84z" />
             </svg>
           </button>
+          <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFile" />
         </div>
       </div>
-    </div>
-    <div class=" bg-wave  py-8"></div>
-    <div class="flex-1 px-6 py-8 flex flex-col items-center justify-center">
-      <div class="w-full  mt-8 max-w-sm mb-8">
-        <div
-          class="flex items-center gap-2 border-b-2 border-text-primary pb-2"
-        >
-          <svg
-            class="w-6 h-6 text-primary"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Your Name"
-            class="flex-1 bg-transparent border-none text-text-primary placeholder-text-secondary focus:outline-none font-medium"
-          />
-        </div>
+    </AuthHeader>
+
+    <main class="flex-1 px-4 pt-14">
+      <label
+        class="flex items-center gap-4 border-b-2 pb-2 transition-colors"
+        :class="focused || name ? 'border-accent/70' : 'border-ink'"
+      >
+        <svg class="h-6 w-6 shrink-0 text-ink" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="7.5" r="4" />
+          <path d="M3.5 20.5c0-3.6 3.2-6 8.5-6s8.5 2.4 8.5 6v.5h-17v-.5z" />
+        </svg>
+        <input
+          v-model="name"
+          type="text"
+          placeholder="Your Name"
+          autocomplete="name"
+          maxlength="40"
+          class="w-full min-w-0 bg-transparent text-[22px] text-ink outline-none placeholder:text-muted/60"
+          @focus="focused = true"
+          @blur="focused = false"
+          @keyup.enter="next"
+        />
+      </label>
+
+      <div class="mt-6 flex justify-end">
+        <ArrowButton :disabled="!canContinue" @click="next" />
       </div>
-      <div class="flex justify-end mb-8 w-full">
-        <button
-          class="bg-[#0891B2] hover:bg-[#0369A1] text-white rounded-full p-4 shadow-lg transition-all active:scale-95"
-        @click="next"
-          >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 7l5 5m0 0l-5 5m5-5H6"
-            />
-          </svg>
-        </button>
-      </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
-
-import { ref } from 'vue'
-
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AuthHeader from '../shared/AuthHeader.vue'
+import ArrowButton from '../shared/ArrowButton.vue'
 
 const router = useRouter()
+const name = ref('')
+const focused = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+const avatarFile = ref<File | null>(null)
+const avatarUrl = ref('')
+
+const canContinue = computed(() => name.value.trim().length >= 2)
+
+const onFile = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (avatarUrl.value) URL.revokeObjectURL(avatarUrl.value)
+  avatarFile.value = file
+  avatarUrl.value = URL.createObjectURL(file)
+}
 
 const next = () => {
-  router.push("/pin/setpin")
+  if (!canContinue.value) return
+  // TODO: send name.value.trim() and avatarFile.value to your API
+  router.push('/pin/setpin')
 }
 
-const fileInput = ref<HTMLInputElement | null>(null)
-const imageUrl = ref<string | null>(null)
-
-// trigger file picker
-const handleEditClick = () => {
-  fileInput.value?.click()
-}
-
-// handle file selection
-const handleFileChange = (e: Event) => {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-  // preview image
-  imageUrl.value = URL.createObjectURL(file)
-}
+onBeforeUnmount(() => avatarUrl.value && URL.revokeObjectURL(avatarUrl.value))
 </script>
