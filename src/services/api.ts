@@ -1,8 +1,26 @@
 import axios, { type AxiosError } from "axios";
 import { toast } from "vue-sonner";
 
-
-import type { SendOtpRequest, ApiResponse, VerifyOtpRequest, VerifyOtpPayload, AuthPayload, RegisterRequest, UploadImagePayload, VerifyPinRequest, UpdateProfileRequest, User } from "../types/api";
+import type {
+  SendOtpRequest,
+  ApiResponse,
+  VerifyOtpRequest,
+  VerifyOtpPayload,
+  AuthPayload,
+  RegisterRequest,
+  UploadImagePayload,
+  VerifyPinRequest,
+  UpdateProfileRequest,
+  User,
+  FriendRequestRecord,
+  FriendUser,
+  IncomingFriendRequest,
+  RespondAction,
+  FriendRecord,
+  ChatListItem,
+  ChatMessage,
+  SendMessagePayload,
+} from "../types/api";
 import { useAuthStore } from "../store/auth";
 import router from "../router";
 
@@ -26,7 +44,12 @@ api.interceptors.request.use((config) => {
   }
 
   if (import.meta.env.DEV) {
-    console.log("API Request:", config.method, `${config.baseURL}${config.url}`, config.data);
+    console.log(
+      "API Request:",
+      config.method,
+      `${config.baseURL}${config.url}`,
+      config.data,
+    );
   }
   return config;
 });
@@ -42,7 +65,12 @@ function getErrorMessage(error: AxiosError<any>): string {
     if (typeof first === "string") return first;
   }
 
-  return data?.message || data?.error || error.message || "Something went wrong. Please try again.";
+  return (
+    data?.message ||
+    data?.error ||
+    error.message ||
+    "Something went wrong. Please try again."
+  );
 }
 
 api.interceptors.response.use(
@@ -71,8 +99,6 @@ api.interceptors.response.use(
 export const toApiPhone = (digits: string) =>
   digits.startsWith("0") ? digits : `0${digits}`;
 
-
-
 export const authService = {
   // ...your existing functions
 
@@ -80,27 +106,99 @@ export const authService = {
     api.post<ApiResponse<null>>("/auth/send-otp", payload).then((r) => r.data),
 
   verifyOtp: (payload: VerifyOtpRequest) =>
-    api.post<ApiResponse<VerifyOtpPayload>>("/auth/verify-otp", payload).then((r) => r.data),
-    register: (payload: RegisterRequest) =>
-    api.post<ApiResponse<AuthPayload>>("/auth/register", payload).then((r) => r.data),
+    api
+      .post<ApiResponse<VerifyOtpPayload>>("/auth/verify-otp", payload)
+      .then((r) => r.data),
+  register: (payload: RegisterRequest) =>
+    api
+      .post<ApiResponse<AuthPayload>>("/auth/register", payload)
+      .then((r) => r.data),
 
   verifyPin: (payload: VerifyPinRequest) =>
-    api.post<ApiResponse<AuthPayload>>("/auth/verify-pin", payload).then((r) => r.data),
+    api
+      .post<ApiResponse<AuthPayload>>("/auth/verify-pin", payload)
+      .then((r) => r.data),
 
   uploadImage: (file: File) => {
     const form = new FormData();
     form.append("image", file);
     // don't set Content-Type yourself; the browser adds the multipart boundary
-    return api.post<ApiResponse<UploadImagePayload>>("/upload/image", form).then((r) => r.data);
+    return api
+      .post<ApiResponse<UploadImagePayload>>("/upload/image", form)
+      .then((r) => r.data);
   },
 
   updateProfile: (payload: UpdateProfileRequest) =>
-  api.put<ApiResponse<User>>("/user/update-profile", payload).then((r) => r.data),
+    api
+      .put<ApiResponse<User>>("/user/update-profile", payload)
+      .then((r) => r.data),
 
-logout: () =>
-  // skipErrorToast: we log out locally no matter what, so no error toast needed
-  api.post<ApiResponse<null>>("/auth/logout", null, { skipErrorToast: true }).then((r) => r.data),
+  logout: () =>
+    // skipErrorToast: we log out locally no matter what, so no error toast needed
+    api
+      .post<ApiResponse<null>>("/auth/logout", null, { skipErrorToast: true })
+      .then((r) => r.data),
 };
 
+export const friendService = {
+  search: (phone: string) =>
+    api
+      .post<ApiResponse<FriendUser>>("/friends/search", { phone })
+      .then((r) => r.data),
 
+  sendRequest: (receiver_id: number) =>
+    api
+      .post<
+        ApiResponse<FriendRequestRecord>
+      >("/friends/request", { receiver_id })
+      .then((r) => r.data),
+
+  // silent = true is for background fetches (like the menu badge), so no error toast
+  getRequests: (silent = false) =>
+    api
+      .get<
+        ApiResponse<IncomingFriendRequest[]>
+      >("/friends/get-friend-request", { skipErrorToast: silent })
+      .then((r) => r.data),
+
+  respond: (requestId: number, action: RespondAction) =>
+    api
+      .post<
+        ApiResponse<FriendRequestRecord>
+      >(`/friends/respond-request/${requestId}`, { action })
+      .then((r) => r.data),
+
+       getFriends: (silent = false) =>
+    api
+      .get<ApiResponse<FriendRecord[]>>("/friends/get-friends", {
+        skipErrorToast: silent,
+      })
+      .then((r) => r.data),
+};
+
+export const conversationService = {
+  getChatList: (silent = false) =>
+    api
+      .get<ApiResponse<ChatListItem[]>>("/conversations/get-chat-list", {
+        skipErrorToast: silent,
+      })
+      .then((r) => r.data),
+
+  sendMessage: (conversationId: number, payload: SendMessagePayload) =>
+    api
+      .post<ApiResponse<ChatMessage>>(
+        `/conversations/${conversationId}/messages`,
+        payload,
+      )
+      .then((r) => r.data),
+
+
+  getMessages: (conversationId: number, silent = false) =>
+    api
+      .get<ApiResponse<ChatMessage[]>>(
+        `/conversations/${conversationId}/messages`,
+        { skipErrorToast: silent },
+      )
+      .then((r) => r.data),
+};
 export default api;

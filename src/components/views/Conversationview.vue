@@ -1,6 +1,5 @@
 <template>
   <div class="flex h-dvh flex-col bg-page">
-    <!-- header -->
     <header class="px-5 pt-5">
       <div class="relative flex h-11 items-center justify-center">
         <button
@@ -13,7 +12,7 @@
         </button>
         <h1 class="text-xl font-bold text-text-primary">Message</h1>
         <button
-          v-if="conv"
+          v-if="chat"
           type="button"
           aria-label="More options"
           class="absolute right-0 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-chip text-text-primary transition-transform active:scale-95"
@@ -22,48 +21,53 @@
         </button>
       </div>
 
-      <div v-if="conv" class="flex items-center gap-3 border-b border-text-secondary/30 py-4">
-        <div class="flex shrink-0">
-          <img
-            v-for="(m, i) in headerAvatars"
-            :key="m.id"
-            :src="m.avatar"
-            :alt="m.name"
-            class="h-11 w-11 rounded-full object-cover"
-            :class="i > 0 && '-ml-3 ring-2 ring-page'"
-          />
-        </div>
+      <div v-if="chat" class="flex items-center gap-3 border-b border-text-secondary/30 py-4">
+        <img
+          :src="chat.friend.profile_picture || FALLBACK_AVATAR"
+          :alt="chat.friend.name"
+          class="h-11 w-11 shrink-0 rounded-full object-cover"
+        />
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[15px] font-bold text-text-primary">{{ conv.title }}</p>
-          <p class="truncate text-xs font-medium text-text-secondary">{{ conv.subtitle }}</p>
+          <p class="truncate text-[15px] font-bold text-text-primary">{{ chat.friend.name }}</p>
+          <p class="truncate text-xs font-medium text-text-secondary">{{ chat.friend.phone }}</p>
         </div>
         <button type="button" aria-label="Video call" class="cursor-pointer text-text-primary"><VideoCameraIcon class="h-7 w-7" /></button>
         <button type="button" aria-label="Voice call" class="ml-3 cursor-pointer text-text-primary"><PhoneIcon class="h-6 w-6" /></button>
       </div>
     </header>
 
-    <!-- not found: never leave the screen blank -->
-    <div v-if="!conv" class="flex flex-1 flex-col items-center justify-center gap-4 bg-chat-bg px-8 text-center">
-      <p class="text-base font-semibold text-text-primary">Conversation not found</p>
-      <RouterLink to="/chats" class="rounded-full bg-linear-to-b from-accent to-accent-dark px-6 py-3 text-sm font-semibold text-white">
-        Back to chats
-      </RouterLink>
+    <!-- not found (only after the chat list has really loaded) -->
+    <div v-if="!chat" class="flex flex-1 flex-col items-center justify-center gap-4 bg-chat-bg px-8 text-center">
+      <p v-if="!chatsStore.fetchedOnce" class="text-sm text-text-secondary">Loading...</p>
+      <template v-else>
+        <p class="text-base font-semibold text-text-primary">Conversation not found</p>
+        <RouterLink to="/chats" class="rounded-full bg-linear-to-b from-accent to-accent-dark px-6 py-3 text-sm font-semibold text-white">
+          Back to chats
+        </RouterLink>
+      </template>
     </div>
 
+    
+
     <template v-else>
-      <!-- messages -->
       <div ref="scroller" class="flex-1 space-y-4 overflow-y-auto bg-chat-bg px-5 py-5">
+        <p v-if="chatsStore.loadingMessages && !messages.length" class="text-center text-sm text-text-secondary">
+          Loading messages...
+        </p>
+        <p v-else-if="!messages.length" class="text-center text-sm text-text-secondary">
+          No messages yet. Say hi 👋
+        </p>
+
         <MessageBubble
           v-for="m in messages"
           :key="m.id"
-          :text="m.text"
-          :time="m.time"
-          :mine="m.from === 'me'"
-          :sender="conv.type === 'group' && m.from !== 'me' ? personById(m.from) : null"
+          :text="m.is_deleted ? 'This message was deleted' : (m.message ?? '')"
+          :time="formatChatTime(m.created_at) + (m.edited_at && !m.is_deleted ? ' · edited' : '')"
+          :mine="m.sender_id !== chat.friend.id"
+          :sender="null"
         />
       </div>
 
-      <!-- composer -->
       <footer class="flex items-center gap-3 border-t border-text-secondary/30 bg-page px-5 py-4">
         <button
           type="button"
@@ -84,9 +88,9 @@
         <button
           type="button"
           aria-label="Send"
-          :disabled="!draft.trim()"
+          :disabled="!draft.trim() || chatsStore.sending"
           class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-accent to-accent-dark text-white shadow-md transition-all"
-          :class="draft.trim() ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-60'"
+          :class="draft.trim() && !chatsStore.sending ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-60'"
           @click="send"
         >
           <PaperAirplaneIcon class="-mt-0.5 ml-0.5 h-5 w-5 -rotate-45" />
@@ -108,15 +112,18 @@ import {
 } from '@heroicons/vue/24/outline'
 import { PaperAirplaneIcon } from '@heroicons/vue/24/solid'
 import MessageBubble from '../../assets/components/Messagebubble.vue'
-import { useConversation } from '../../assets/composables/Useconversation.ts'
+import { useChatsStore } from '../../store/chats.ts'
+import { formatChatTime } from '../../utils/formatTime.ts'
 
-const props = defineProps<{ id: string }>() // comes from the route (props: true)
+const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=12'
+
+const props = defineProps<{ id: string }>()
 const router = useRouter()
-const { getConversation, getMessages, sendMessage, personById } = useConversation()
+const chatsStore = useChatsStore()
 
-const conv = computed(() => getConversation(props.id))
-const messages = computed(() => getMessages(props.id))
-const headerAvatars = computed(() => (conv.value ? conv.value.members.slice(0, 2) : []))
+const conversationId = computed(() => Number(props.id))
+const chat = computed(() => chatsStore.getChat(conversationId.value))
+const messages = computed(() => chatsStore.getMessages(conversationId.value))
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
@@ -126,13 +133,21 @@ const scrollToBottom = async () => {
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
 
-const send = () => {
-  if (!draft.value.trim()) return
-  sendMessage(props.id, draft.value)
+const send = async () => {
+  const text = draft.value.trim()
+  if (!text || !chat.value || chatsStore.sending) return
   draft.value = ''
+  const ok = await chatsStore.sendMessage(conversationId.value, text)
+  if (!ok) draft.value = text
+}
+
+const load = async () => {
+  if (!chatsStore.fetchedOnce) await chatsStore.fetchChats()
+  if (chat.value) await chatsStore.fetchMessages(conversationId.value)
+  scrollToBottom()
 }
 
 watch(() => messages.value.length, scrollToBottom)
-watch(() => props.id, scrollToBottom)
-onMounted(scrollToBottom)
+watch(conversationId, load)
+onMounted(load)
 </script>

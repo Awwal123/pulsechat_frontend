@@ -195,7 +195,7 @@
                 <span class="text-sm text-text-secondary">(+234)</span>
                 <input
                   id="p-phone"
-                   :value="nationalPhone"
+                  :value="nationalPhone"
                   type="tel"
                   disabled
                   class="w-full min-w-0 cursor-not-allowed bg-transparent text-[15px] text-text-primary outline-none"
@@ -315,6 +315,7 @@ import MainLayout from '../layout/MainLayout.vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '../../store/auth.ts'
+import { useFriendsStore } from '../../store/friends.ts'
 
 interface Profile {
   name: string
@@ -326,6 +327,7 @@ interface Profile {
 }
 
 const router = useRouter()
+const friends = useFriendsStore()
 const auth = useAuthStore()
 const { user, updatingProfile, loggingOut } = storeToRefs(auth)
 
@@ -438,6 +440,7 @@ const save = async () => {
 const logout = async () => {
   if (loggingOut.value) return
   await auth.signOut()
-  router.replace('/login') // use your login route
+  friends.reset()
+  router.replace('/login')
 }
 </script>

@@ -38,7 +38,7 @@
         :class="focused ? 'border-accent' : 'border-transparent'"
       >
         <PhoneIcon class="h-5 w-5 shrink-0" :class="focused ? 'text-accent' : 'text-text-secondary'" />
-        <span class="text-sm font-semibold text-text-secondary">(+44)</span>
+        <span class="text-sm font-semibold text-text-secondary">(+234)</span>
         <input
           :value="formatted"
           type="tel"
@@ -51,8 +51,42 @@
         />
       </label>
 
+      <!-- searching -->
+      <div v-if="searching" class="flex flex-col items-center pt-20 text-center">
+        <p class="animate-pulse text-sm font-semibold text-text-secondary">Searching…</p>
+      </div>
+
+      <!-- result -->
+      <ul v-else-if="searchResult" class="mt-4 space-y-3">
+        <li class="flex items-center gap-3 rounded-2xl bg-chip/60 p-3">
+          <img
+            :src="searchResult.profile_picture"
+            :alt="searchResult.name"
+            class="h-12 w-12 shrink-0 rounded-full object-cover"
+          />
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[15px] font-bold text-text-primary">{{ searchResult.name }}</p>
+            <p class="truncate text-xs font-medium text-text-secondary">{{ displayPhone(searchResult.phone) }}</p>
+          </div>
+          <button
+            type="button"
+            :aria-label="isRequested(searchResult.id) ? 'Request sent' : 'Send friend request'"
+            :disabled="isRequested(searchResult.id) || sendingTo !== null"
+            class="flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all active:scale-95 disabled:cursor-default"
+            :class="isRequested(searchResult.id)
+              ? 'bg-chip text-text-secondary'
+              : 'bg-linear-to-b from-accent to-accent-dark text-white shadow-md disabled:opacity-60'"
+            @click="friends.sendRequest(searchResult.id)"
+          >
+            <CheckIcon v-if="isRequested(searchResult.id)" class="h-4 w-4" />
+            <UserPlusIcon v-else class="h-4 w-4" />
+            {{ isRequested(searchResult.id) ? 'Sent' : sendingTo === searchResult.id ? 'Sending…' : 'Add' }}
+          </button>
+        </li>
+      </ul>
+
       <!-- empty state -->
-      <div v-if="results.length === 0" class="flex flex-col items-center pt-20 text-center">
+      <div v-else class="flex flex-col items-center pt-20 text-center">
         <div class="flex h-36 w-36 items-center justify-center rounded-full bg-accent/10 text-accent/40">
           <svg class="h-20 w-20" viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="8" y="14" width="80" height="56" rx="16" />
@@ -63,47 +97,23 @@
           </svg>
         </div>
         <p class="mt-5 text-base font-semibold text-text-primary">
-          {{ digits ? 'No user found' : 'Find your friends' }}
+          {{ hasSearched ? 'No user found' : 'Find your friends' }}
         </p>
         <p class="mt-1 max-w-[16rem] text-sm text-text-secondary">
-          {{ digits ? 'No user found with that number.' : 'Enter a phone number to search for people you know.' }}
+          {{ hasSearched ? 'No user found with that number.' : 'Enter a phone number to search for people you know.' }}
         </p>
       </div>
-
-      <!-- results -->
-      <ul v-else class="mt-4 space-y-3">
-        <li
-          v-for="p in results"
-          :key="p.id"
-          class="flex items-center gap-3 rounded-2xl bg-chip/60 p-3"
-        >
-          <img :src="p.avatar" :alt="p.name" class="h-12 w-12 shrink-0 rounded-full object-cover" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-[15px] font-bold text-text-primary">{{ p.name }}</p>
-            <p class="truncate text-xs font-medium text-text-secondary">{{ p.phone }}</p>
-          </div>
-          <button
-            type="button"
-            :aria-label="isRequested(p.id) ? 'Request sent' : 'Send friend request'"
-            :disabled="isRequested(p.id)"
-            class="flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all active:scale-95 disabled:cursor-default"
-            :class="isRequested(p.id)
-              ? 'bg-chip text-text-secondary'
-              : 'bg-linear-to-b from-accent to-accent-dark text-white shadow-md'"
-            @click="sendRequest(p.id)"
-          >
-            <CheckIcon v-if="isRequested(p.id)" class="h-4 w-4" />
-            <UserPlusIcon v-else class="h-4 w-4" />
-            {{ isRequested(p.id) ? 'Sent' : 'Add' }}
-          </button>
-        </li>
-      </ul>
     </section>
 
     <!-- ── incoming requests ─────────────────────────── -->
     <section v-else class="px-4 pt-5">
+      <!-- loading -->
+      <div v-if="loadingRequests && requests.length === 0" class="flex flex-col items-center pt-20 text-center">
+        <p class="animate-pulse text-sm font-semibold text-text-secondary">Loading requests…</p>
+      </div>
+
       <!-- empty state -->
-      <div v-if="requests.length === 0" class="flex flex-col items-center pt-20 text-center">
+      <div v-else-if="requests.length === 0" class="flex flex-col items-center pt-20 text-center">
         <div class="flex h-36 w-36 items-center justify-center rounded-full bg-accent/10 text-accent/40">
           <InboxIcon class="h-16 w-16" />
         </div>
@@ -122,12 +132,16 @@
         leave-active-class="transition duration-200 ease-in"
         leave-to-class="-translate-x-4 opacity-0"
       >
-        <li v-for="r in requests" :key="r.id" class="rounded-2xl bg-chip/60 p-4">
+        <li v-for="r in requests" :key="r.friend_request_id" class="rounded-2xl bg-chip/60 p-4">
           <div class="flex items-center gap-3">
-            <img :src="r.avatar" :alt="r.name" class="h-14 w-14 shrink-0 rounded-full object-cover" />
+            <img
+              :src="r.sender.profile_picture"
+              :alt="r.sender.name"
+              class="h-14 w-14 shrink-0 rounded-full object-cover"
+            />
             <div class="min-w-0 flex-1">
-              <p class="truncate text-base font-bold text-text-primary">{{ r.name }}</p>
-              <p class="truncate text-xs font-medium text-text-secondary">{{ r.phone }}</p>
+              <p class="truncate text-base font-bold text-text-primary">{{ r.sender.name }}</p>
+              <p class="truncate text-xs font-medium text-text-secondary">{{ displayPhone(r.sender.phone) }}</p>
               <p class="mt-0.5 text-xs text-text-secondary/80">Wants to be your friend</p>
             </div>
           </div>
@@ -136,19 +150,21 @@
           <div class="mt-4 flex gap-3">
             <button
               type="button"
-              class="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-linear-to-b from-accent to-accent-dark text-sm font-semibold text-white shadow-md transition-all active:scale-95"
-              @click="acceptRequest(r.id)"
+              :disabled="!!responding"
+              class="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-linear-to-b from-accent to-accent-dark text-sm font-semibold text-white shadow-md transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="friends.respond(r.friend_request_id, 'accept')"
             >
               <CheckIcon class="h-5 w-5" />
-              Accept
+              {{ isBusy(r.friend_request_id, 'accept') ? 'Accepting…' : 'Accept' }}
             </button>
             <button
               type="button"
-              class="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full border border-danger/40 text-sm font-semibold text-danger transition-all hover:bg-danger/10 active:scale-95"
-              @click="rejectRequest(r.id)"
+              :disabled="!!responding"
+              class="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full border border-danger/40 text-sm font-semibold text-danger transition-all hover:bg-danger/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="friends.respond(r.friend_request_id, 'reject')"
             >
               <XMarkIcon class="h-5 w-5" />
-              Reject
+              {{ isBusy(r.friend_request_id, 'reject') ? 'Rejecting…' : 'Reject' }}
             </button>
           </div>
         </li>
@@ -157,9 +173,11 @@
   </SubPageLayout>
 </template>
 
+
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import {
   CheckIcon,
   InboxIcon,
@@ -170,10 +188,17 @@ import {
   BellAlertIcon,
 } from '@heroicons/vue/24/outline'
 import SubPageLayout from '../layout/SubPageLayout.vue'
-import { useContacts } from '../../assets/composables/Usecontacts.ts'
+import { toApiPhone } from '../../services/api.ts'
+import { useFriendsStore } from '../../store/friends.ts'
+import type { RespondAction } from '../../types/api.ts'
+
 
 const route = useRoute()
-const { requests, pendingCount, searchDirectory, isRequested, sendRequest, acceptRequest, rejectRequest } = useContacts()
+const friends = useFriendsStore()
+const {
+  searchResult, searching, hasSearched,
+  requests, loadingRequests, sentIds, sendingTo, responding, pendingCount,
+} = storeToRefs(friends)
 
 const tabs = [
   { id: 'find', label: 'Find', icon: MagnifyingGlassIcon },
@@ -186,11 +211,24 @@ const focused = ref(false)
 const formatted = computed(() =>
   [digits.value.slice(0, 2), digits.value.slice(2, 6), digits.value.slice(6, 10)].filter(Boolean).join(' '),
 )
-const results = computed(() => searchDirectory(digits.value))
 
 const onInput = (e: Event) => {
   const el = e.target as HTMLInputElement
-  digits.value = el.value.replace(/\D/g, '').slice(0, 10)
+  // drop a leading 0 so 0801... and 801... both work
+  digits.value = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10)
   el.value = formatted.value
 }
+
+// search once the full number is typed
+watch(digits, (val) => {
+  if (val.length === 10) friends.search(toApiPhone(val))
+  else friends.clearSearch()
+})
+
+const displayPhone = (phone: string) => `(+234) ${phone.replace(/^0/, '')}`
+const isRequested = (id: number) => sentIds.value.includes(id)
+const isBusy = (id: number, action: RespondAction) =>
+  responding.value?.id === id && responding.value.action === action
+
+onMounted(() => friends.fetchRequests())
 </script>
