@@ -49,7 +49,8 @@ const routes = [
     component: Step3ProfileName,
     beforeEnter: () => (usePhone().otpVerified.value ? true : "/signup/phone"),
   },
-  { path: "/pin/setpin", name: "PINSecurity", component: PINSecurity },
+ { path: '/pin/setpin', component: PINSecurity, props: { mode: 'set' } },
+{ path: '/pin/verify', component:  PINSecurity, props: { mode: 'verify' } },
 
   // ── app ────────────────────────────────────────────────
   { path: "/chats", name: "Chats", component: ChatView },

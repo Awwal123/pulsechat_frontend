@@ -229,8 +229,11 @@ const handleDragEnd = () => {
 const next = () => {
   if (current.value < slides.value.length - 1) {
     current.value++;
+  } else {
+    getStarted();
   }
 };
+
 
 const skip = () => {
   current.value = slides.value.length - 1;

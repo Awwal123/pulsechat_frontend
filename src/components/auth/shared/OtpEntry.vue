@@ -17,7 +17,7 @@
           :disabled="seconds > 0"
           @click="resend"
         >
-          Resend Code
+         {{ sendingOtp ? 'Sending…' : 'Resend Code' }}
         </button>
       </div>
 
@@ -40,8 +40,9 @@
         />
       </div>
 
-      <div class="mt-6 flex justify-end">
-        <ArrowButton :disabled="!isComplete" @click="verify" />
+       <div class="mt-6 flex items-center justify-end gap-3">
+        <span v-if="verifyingOtp" class="animate-pulse text-sm text-muted">Verifying…</span>
+        <ArrowButton :disabled="!isComplete || verifyingOtp" @click="verify" />
       </div>
     </main>
   </div>
@@ -52,15 +53,21 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AuthHeader from './AuthHeader.vue'
 import ArrowButton from './ArrowButton.vue'
 import { usePhone } from '../../../assets/composables/Usephone.ts';
+import { storeToRefs } from 'pinia';
+import { useAuthStore } from '../../../store/auth.ts';
+import { toApiPhone } from '../../../services/api.ts';
+import type { VerifyOtpPayload } from '../../../types/api.ts';
 
 
-defineProps<{ mode: 'login' | 'register' }>()
-const emit = defineEmits<{ verified: [code: string] }>()
+const props = defineProps<{ mode: 'login' | 'register' }>()
 
+const emit = defineEmits<{ verified: [payload: VerifyOtpPayload] }>()
 const LENGTH = 4
-const RESEND_AFTER = 45
+const RESEND_AFTER = 60
 
-const { formatted } = usePhone()
+const auth = useAuthStore()
+const { sendingOtp, verifyingOtp } = storeToRefs(auth)
+const { digits, formatted } = usePhone()
 const code = reactive<string[]>(Array(LENGTH).fill(''))
 const inputs = ref<HTMLInputElement[]>([])
 const activeIndex = ref(0)
@@ -93,14 +100,23 @@ const onPaste = (e: ClipboardEvent) => {
   focusAt(Math.min(digits.length, LENGTH - 1))
 }
 
-const verify = () => {
-  if (isComplete.value) emit('verified', code.join('')) // TODO: verify against your API first
+const verify = async () => {
+  if (!isComplete.value || verifyingOtp.value) return
+  const result = await auth.verifyOtp(toApiPhone(digits.value), code.join(''), props.mode)
+  if (result) {
+    emit('verified', result)
+  } else {
+    code.fill('')
+    focusAt(0)
+  }
 }
 
 /* countdown */
 const seconds = ref(RESEND_AFTER)
 let timer: ReturnType<typeof setInterval> | undefined
-const timeLabel = computed(() => `00 : ${String(seconds.value).padStart(2, '0')}`)
+const pad = (n: number) => String(n).padStart(2, '0')
+const timeLabel = computed(() => `${pad(Math.floor(seconds.value / 60))} : ${pad(seconds.value % 60)}`)
+const canResend = computed(() => seconds.value === 0 && !sendingOtp.value)
 
 const startTimer = () => {
   clearInterval(timer)
@@ -110,10 +126,15 @@ const startTimer = () => {
     else clearInterval(timer)
   }, 1000)
 }
-const resend = () => {
-  code.fill('')
-  focusAt(0)
-  startTimer() // TODO: call your resend endpoint
+
+const resend = async () => {
+  if (!canResend.value) return
+  const ok = await auth.sendOtp(toApiPhone(digits.value), props.mode)
+  if (ok) {
+    code.fill('')
+    focusAt(0)
+    startTimer()
+  }
 }
 
 onMounted(() => {
