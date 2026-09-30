@@ -194,3 +194,28 @@ export interface ChatMessage {
   reply_to?: ChatMessage | null; // the quoted message (same shape)
 }
 
+
+export interface ReadReceipt {
+  id: number;
+  message_id: number;
+  user_id: number;
+  read_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageReadStatus extends ReadReceipt {
+  user: FriendProfile;
+}
+
+export interface DeletedMessage {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  message: null;
+  reply_to_id: number | null;
+  edited_at: string | null;
+  deleted_at: string;
+  created_at: string;
+  updated_at: string;
+}

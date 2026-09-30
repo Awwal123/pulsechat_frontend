@@ -47,10 +47,8 @@
       </template>
     </div>
 
-    
-
     <template v-else>
-      <div ref="scroller" class="flex-1 space-y-4 overflow-y-auto bg-chat-bg px-5 py-5">
+      <div ref="scroller" class="flex-1 space-y-3 overflow-y-auto bg-chat-bg px-5 py-5">
         <p v-if="chatsStore.loadingMessages && !messages.length" class="text-center text-sm text-text-secondary">
           Loading messages...
         </p>
@@ -58,18 +56,41 @@
           No messages yet. Say hi 👋
         </p>
 
-        <MessageBubble
+        <ChatBubble
           v-for="m in messages"
           :key="m.id"
-          :text="m.is_deleted ? 'This message was deleted' : (m.message ?? '')"
-          :time="formatChatTime(m.created_at) + (m.edited_at && !m.is_deleted ? ' · edited' : '')"
+          :message="m"
           :mine="m.sender_id !== chat.friend.id"
-          :sender="null"
+          :read="chatsStore.isReadByFriend(m.id)"
+          :friend-id="chat.friend.id"
+          @menu="openMenu"
         />
+      </div>
+
+      <!-- editing banner -->
+      <div
+        v-if="editing"
+        class="flex items-center gap-2 border-t border-text-secondary/30 bg-page px-5 py-2 text-xs"
+      >
+        <PencilIcon class="h-4 w-4 shrink-0 text-accent" />
+        <div class="min-w-0 flex-1">
+          <p class="font-bold text-accent">Editing message</p>
+          <p class="truncate text-text-secondary">{{ editing.message }}</p>
+        </div>
       </div>
 
       <footer class="flex items-center gap-3 border-t border-text-secondary/30 bg-page px-5 py-4">
         <button
+          v-if="editing"
+          type="button"
+          aria-label="Cancel edit"
+          class="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-chip text-text-primary transition-transform active:scale-95"
+          @click="cancelEdit"
+        >
+          <XMarkIcon class="h-6 w-6" />
+        </button>
+        <button
+          v-else
           type="button"
           aria-label="Attach"
           class="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-chip text-accent transition-transform active:scale-95"
@@ -78,44 +99,76 @@
         </button>
 
         <input
+          ref="input"
           v-model="draft"
           type="text"
-          placeholder="Type a message ..."
+          :placeholder="editing ? 'Edit message ...' : 'Type a message ...'"
           class="h-11 min-w-0 flex-1 rounded-lg bg-field px-4 text-[15px] text-text-primary outline-none placeholder:text-text-secondary/70"
-          @keyup.enter="send"
+          @keyup.enter="submit"
+          @keyup.esc="cancelEdit"
         />
 
         <button
           type="button"
-          aria-label="Send"
-          :disabled="!draft.trim() || chatsStore.sending"
+          :aria-label="editing ? 'Save edit' : 'Send'"
+          :disabled="!canSubmit"
           class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-accent to-accent-dark text-white shadow-md transition-all"
-          :class="draft.trim() && !chatsStore.sending ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-60'"
-          @click="send"
+          :class="canSubmit ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-60'"
+          @click="submit"
         >
-          <PaperAirplaneIcon class="-mt-0.5 ml-0.5 h-5 w-5 -rotate-45" />
+          <CheckIcon v-if="editing" class="h-6 w-6" />
+          <PaperAirplaneIcon v-else class="-mt-0.5 ml-0.5 h-5 w-5 -rotate-45" />
         </button>
       </footer>
     </template>
+
+    <!-- action menu: Edit + Delete only -->
+    <div v-if="menu" class="fixed inset-0 z-50" @click="menu = null" @contextmenu.prevent="menu = null">
+      <div
+        class="absolute w-44 overflow-hidden rounded-2xl bg-page py-1 shadow-xl ring-1 ring-text-secondary/20"
+        :style="{ top: menu.top + 'px', right: '20px' }"
+        @click.stop
+      >
+        <button
+          type="button"
+          class="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-[15px] font-medium text-text-primary hover:bg-chip/60"
+          @click="startEdit"
+        >
+          <PencilIcon class="h-5 w-5" /> Edit
+        </button>
+        <button
+          type="button"
+          class="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-[15px] font-medium text-red-500 hover:bg-chip/60"
+          @click="removeMessage"
+        >
+          <TrashIcon class="h-5 w-5" /> Delete
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeftIcon,
+  CheckIcon,
   EllipsisHorizontalIcon,
+  PencilIcon,
   PhoneIcon,
   PlusIcon,
+  TrashIcon,
   VideoCameraIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { PaperAirplaneIcon } from '@heroicons/vue/24/solid'
-import MessageBubble from '../../assets/components/Messagebubble.vue'
+import ChatBubble from '../../assets/components/ChatBubble.vue'
 import { useChatsStore } from '../../store/chats.ts'
-import { formatChatTime } from '../../utils/formatTime.ts'
+import type { ChatMessage } from '../../types/api.ts'
 
 const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=12'
+const POLL_MS = 5000
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -127,27 +180,107 @@ const messages = computed(() => chatsStore.getMessages(conversationId.value))
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
+const input = ref<HTMLInputElement | null>(null)
+
+const editing = ref<ChatMessage | null>(null)
+const menu = ref<{ message: ChatMessage; top: number } | null>(null)
+
+const canSubmit = computed(
+  () => !!draft.value.trim() && !chatsStore.sending && !chatsStore.mutating,
+)
 
 const scrollToBottom = async () => {
   await nextTick()
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
 
-const send = async () => {
+// ── send / edit ─────────────────────────────────────────
+const submit = async () => {
   const text = draft.value.trim()
-  if (!text || !chat.value || chatsStore.sending) return
+  if (!text || !chat.value || !canSubmit.value) return
+
+  if (editing.value) {
+    const target = editing.value
+    if (text === target.message) return cancelEdit() // nothing changed
+    const ok = await chatsStore.editMessage(conversationId.value, target.id, text)
+    if (ok) cancelEdit()
+    return
+  }
+
   draft.value = ''
   const ok = await chatsStore.sendMessage(conversationId.value, text)
   if (!ok) draft.value = text
 }
 
+// ── action menu ─────────────────────────────────────────
+const openMenu = (message: ChatMessage, rect: DOMRect) => {
+  const menuHeight = 110
+  const below = rect.bottom + 8
+  const top = below + menuHeight > window.innerHeight ? rect.top - menuHeight - 8 : below
+  menu.value = { message, top: Math.max(8, top) }
+}
+
+const startEdit = async () => {
+  if (!menu.value) return
+  editing.value = menu.value.message
+  draft.value = menu.value.message.message ?? ''
+  menu.value = null
+  await nextTick()
+  input.value?.focus()
+}
+
+const cancelEdit = () => {
+  editing.value = null
+  draft.value = ''
+}
+
+const removeMessage = async () => {
+  if (!menu.value) return
+  const target = menu.value.message
+  menu.value = null
+  if (editing.value?.id === target.id) cancelEdit()
+  await chatsStore.deleteMessage(conversationId.value, target.id)
+}
+
+// ── load + keep in sync (read ticks / new messages) ─────
+const syncReceipts = async () => {
+  if (!chat.value) return
+  const friendId = chat.value.friend.id
+  await Promise.all([
+    chatsStore.markIncomingAsRead(conversationId.value, friendId),
+    chatsStore.refreshReadReceipts(conversationId.value, friendId),
+  ])
+}
+
 const load = async () => {
+  cancelEdit()
   if (!chatsStore.fetchedOnce) await chatsStore.fetchChats()
-  if (chat.value) await chatsStore.fetchMessages(conversationId.value)
+  if (chat.value) {
+    await chatsStore.fetchMessages(conversationId.value)
+    await syncReceipts()
+  }
   scrollToBottom()
+}
+
+let timer: number | undefined
+let syncing = false
+const poll = async () => {
+  if (syncing || document.hidden || !chat.value || chatsStore.mutating) return
+  syncing = true
+  try {
+    await chatsStore.fetchMessages(conversationId.value, true)
+    await syncReceipts()
+  } finally {
+    syncing = false
+  }
 }
 
 watch(() => messages.value.length, scrollToBottom)
 watch(conversationId, load)
-onMounted(load)
+
+onMounted(() => {
+  load()
+  timer = window.setInterval(poll, POLL_MS)
+})
+onBeforeUnmount(() => clearInterval(timer))
 </script>

@@ -20,6 +20,9 @@ import type {
   ChatListItem,
   ChatMessage,
   SendMessagePayload,
+  DeletedMessage,
+  MessageReadStatus,
+  ReadReceipt,
 } from "../types/api";
 import { useAuthStore } from "../store/auth";
 import router from "../router";
@@ -199,6 +202,37 @@ export const conversationService = {
         `/conversations/${conversationId}/messages`,
         { skipErrorToast: silent },
       )
+      .then((r) => r.data),
+
+  
+};
+
+export const messageService = {
+  markAsRead: (message_id: number) =>
+    api
+      .post<ApiResponse<ReadReceipt>>(
+        "/messages/mark-as-read",
+        { message_id },
+        { skipErrorToast: true },
+      )
+      .then((r) => r.data),
+
+  getReadStatus: (messageId: number) =>
+    api
+      .get<ApiResponse<MessageReadStatus[]>>(
+        `/messages/${messageId}/read-status`,
+        { skipErrorToast: true },
+      )
+      .then((r) => r.data),
+
+  edit: (messageId: number, message: string) =>
+    api
+      .put<ApiResponse<ChatMessage>>(`/messages/${messageId}/edit-message`, { message })
+      .then((r) => r.data),
+
+  remove: (messageId: number) =>
+    api
+      .delete<ApiResponse<DeletedMessage>>(`/messages/${messageId}/delete-message`)
       .then((r) => r.data),
 };
 export default api;
