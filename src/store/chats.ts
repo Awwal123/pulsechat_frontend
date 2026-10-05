@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { conversationService, messageService } from "../services/api.ts";
 import type { ChatListItem, ChatMessage, LastMessage } from "../types/api.ts";
+import echo from "../echo.js";
 
 export const useChatsStore = defineStore("chats", () => {
   const chats = ref<ChatListItem[]>([]);
@@ -12,9 +13,14 @@ export const useChatsStore = defineStore("chats", () => {
   const sending = ref(false);
   const mutating = ref(false); // edit / delete in progress
   const readByFriend = ref<Record<number, boolean>>({}); // my messages the friend has read
+  const activeConversationId = ref<number | null>(null); // the chat currently open on screen
+  const typing = ref<Record<number, boolean>>({}); // is the friend typing, per conversation
 
-  // incoming message ids already marked as read, per conversation (not reactive on purpose)
+  // not reactive on purpose
   const handledIncoming = new Map<number, Set<number>>();
+  const subscribed = new Set<number>();
+  const typingTimers = new Map<number, number>();
+  const lastWhisperAt = new Map<number, number>();
 
   // ── chats ────────────────────────────────────────────
   async function fetchChats(silent = false) {
@@ -22,6 +28,7 @@ export const useChatsStore = defineStore("chats", () => {
     try {
       const res = await conversationService.getChatList(silent);
       chats.value = res.data;
+      listenToAll();
       return true;
     } catch {
       return false;
@@ -73,6 +80,19 @@ export const useChatsStore = defineStore("chats", () => {
     }
   }
 
+  // moves the chat to the top and refreshes its preview line
+  function bumpChat(chat: ChatListItem, msg: ChatMessage) {
+    chat.last_message = {
+      id: msg.id,
+      message: msg.message,
+      sender_id: msg.sender_id,
+      created_at: msg.created_at,
+      is_deleted: false,
+    };
+    chat.last_message_at = msg.created_at;
+    chats.value = [chat, ...chats.value.filter((c) => c !== chat)];
+  }
+
   async function sendMessage(
     conversationId: number,
     text: string,
@@ -93,20 +113,12 @@ export const useChatsStore = defineStore("chats", () => {
         reply_to: res.data.reply_to ?? null,
       };
 
-      (messages.value[conversationId] ??= []).push(msg);
+      // the websocket event can beat the HTTP response, so don't add it twice
+      const list = (messages.value[conversationId] ??= []);
+      if (!list.some((m) => m.id === msg.id)) list.push(msg);
 
       const chat = getChat(conversationId);
-      if (chat) {
-        chat.last_message = {
-          id: msg.id,
-          message: msg.message,
-          sender_id: msg.sender_id,
-          created_at: msg.created_at,
-          is_deleted: false,
-        };
-        chat.last_message_at = msg.created_at;
-        chats.value = [chat, ...chats.value.filter((c) => c !== chat)];
-      }
+      if (chat) bumpChat(chat, msg);
       return true;
     } catch {
       return false;
@@ -160,6 +172,95 @@ export const useChatsStore = defineStore("chats", () => {
     } finally {
       mutating.value = false;
     }
+  }
+
+  // ── typing indicator ─────────────────────────────────
+  // friend side: show "typing..." and auto-clear if the signal stops
+  function setTyping(conversationId: number, on: boolean) {
+    clearTimeout(typingTimers.get(conversationId));
+    typingTimers.delete(conversationId);
+    typing.value[conversationId] = on;
+    if (on) {
+      typingTimers.set(
+        conversationId,
+        window.setTimeout(() => (typing.value[conversationId] = false), 3000),
+      );
+    }
+  }
+
+  const isTyping = (conversationId: number) => !!typing.value[conversationId];
+
+  // my side: tell the friend I'm typing (throttled to one whisper every 2s)
+  function sendTyping(conversationId: number) {
+    const now = Date.now();
+    if (now - (lastWhisperAt.get(conversationId) ?? 0) < 2000) return;
+    lastWhisperAt.set(conversationId, now);
+    echo
+      .private(`conversation.${conversationId}`)
+      .whisper("typing", { typing: true });
+  }
+
+  function sendStoppedTyping(conversationId: number) {
+    lastWhisperAt.delete(conversationId);
+    echo
+      .private(`conversation.${conversationId}`)
+      .whisper("typing", { typing: false });
+  }
+
+  // ── real-time ────────────────────────────────────────
+  // Called for every `message.sent` event, for any conversation.
+  function receiveMessage(raw: ChatMessage) {
+    const conversationId = raw.conversation_id;
+    const msg: ChatMessage = {
+      ...raw,
+      edited_at: raw.edited_at ?? null,
+      deleted_at: raw.deleted_at ?? null,
+      is_deleted: raw.is_deleted ?? false,
+      reply_to: raw.reply_to ?? null,
+    };
+
+    // 1) add to the open thread (only if that thread is already loaded)
+    const list = messages.value[conversationId];
+    if (list && !list.some((m) => m.id === msg.id)) list.push(msg);
+
+    // 2) update the chat list
+    const chat = getChat(conversationId);
+    if (!chat) {
+      fetchChats(true); // brand-new conversation we don't know about yet
+      return;
+    }
+
+    const incoming = msg.sender_id === chat.friend.id;
+    if (incoming) setTyping(conversationId, false); // they sent it, so they stopped typing
+
+    if (chat.last_message && chat.last_message.id >= msg.id) return; // already handled
+
+    if (incoming && activeConversationId.value !== conversationId) {
+      chat.unread_count = (chat.unread_count ?? 0) + 1;
+    }
+    bumpChat(chat, msg);
+  }
+
+  function listenTo(conversationId: number) {
+    if (subscribed.has(conversationId)) return;
+    subscribed.add(conversationId);
+    echo
+      .private(`conversation.${conversationId}`)
+      .listen(".message.sent", (event: { message: ChatMessage }) => {
+        receiveMessage(event.message);
+      })
+      .listenForWhisper("typing", (e: { typing: boolean }) => {
+        setTyping(conversationId, e.typing);
+      });
+  }
+
+  function listenToAll() {
+    chats.value.forEach((c) => listenTo(c.conversation_id));
+  }
+
+  function stopListening() {
+    subscribed.forEach((id) => echo.leave(`conversation.${id}`));
+    subscribed.clear();
   }
 
   // ── read receipts ────────────────────────────────────
@@ -231,9 +332,15 @@ export const useChatsStore = defineStore("chats", () => {
   const isReadByFriend = (messageId: number) => !!readByFriend.value[messageId];
 
   function reset() {
+    stopListening();
+    typingTimers.forEach((t) => clearTimeout(t));
+    typingTimers.clear();
+    lastWhisperAt.clear();
+    typing.value = {};
     chats.value = [];
     messages.value = {};
     readByFriend.value = {};
+    activeConversationId.value = null;
     handledIncoming.clear();
     fetchedOnce.value = false;
   }
@@ -246,6 +353,7 @@ export const useChatsStore = defineStore("chats", () => {
     loadingMessages,
     sending,
     mutating,
+    activeConversationId,
     fetchChats,
     getChat,
     getMessages,
@@ -253,6 +361,13 @@ export const useChatsStore = defineStore("chats", () => {
     sendMessage,
     editMessage,
     deleteMessage,
+    receiveMessage,
+    isTyping,
+    sendTyping,
+    sendStoppedTyping,
+    listenTo,
+    listenToAll,
+    stopListening,
     markIncomingAsRead,
     refreshReadReceipts,
     isReadByFriend,

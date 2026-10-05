@@ -29,7 +29,12 @@
         />
         <div class="min-w-0 flex-1">
           <p class="truncate text-[15px] font-bold text-text-primary">{{ chat.friend.name }}</p>
-          <p class="truncate text-xs font-medium text-text-secondary">{{ chat.friend.phone }}</p>
+          <p
+            class="truncate text-xs font-medium"
+            :class="chatsStore.isTyping(conversationId) ? 'text-accent' : 'text-text-secondary'"
+          >
+            {{ chatsStore.isTyping(conversationId) ? 'typing...' : chat.friend.phone }}
+          </p>
         </div>
         <button type="button" aria-label="Video call" class="cursor-pointer text-text-primary"><VideoCameraIcon class="h-7 w-7" /></button>
         <button type="button" aria-label="Voice call" class="ml-3 cursor-pointer text-text-primary"><PhoneIcon class="h-6 w-6" /></button>
@@ -104,6 +109,7 @@
           type="text"
           :placeholder="editing ? 'Edit message ...' : 'Type a message ...'"
           class="h-11 min-w-0 flex-1 rounded-lg bg-field px-4 text-[15px] text-text-primary outline-none placeholder:text-text-secondary/70"
+          @input="onInput"
           @keyup.enter="submit"
           @keyup.esc="cancelEdit"
         />
@@ -168,7 +174,7 @@ import { useChatsStore } from '../../store/chats.ts'
 import type { ChatMessage } from '../../types/api.ts'
 
 const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=12'
-const POLL_MS = 5000
+const POLL_MS = 30000 // real-time handles new messages now; polling is just a safety net
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -194,6 +200,13 @@ const scrollToBottom = async () => {
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
 
+// ── typing indicator ────────────────────────────────────
+const onInput = () => {
+  if (editing.value) return // no typing signal while editing an old message
+  if (draft.value.trim()) chatsStore.sendTyping(conversationId.value)
+  else chatsStore.sendStoppedTyping(conversationId.value)
+}
+
 // ── send / edit ─────────────────────────────────────────
 const submit = async () => {
   const text = draft.value.trim()
@@ -208,6 +221,7 @@ const submit = async () => {
   }
 
   draft.value = ''
+  chatsStore.sendStoppedTyping(conversationId.value)
   const ok = await chatsStore.sendMessage(conversationId.value, text)
   if (!ok) draft.value = text
 }
@@ -242,7 +256,7 @@ const removeMessage = async () => {
   await chatsStore.deleteMessage(conversationId.value, target.id)
 }
 
-// ── load + keep in sync (read ticks / new messages) ─────
+// ── load + keep in sync ─────────────────────────────────
 const syncReceipts = async () => {
   if (!chat.value) return
   const friendId = chat.value.friend.id
@@ -254,7 +268,9 @@ const syncReceipts = async () => {
 
 const load = async () => {
   cancelEdit()
+  chatsStore.activeConversationId = conversationId.value
   if (!chatsStore.fetchedOnce) await chatsStore.fetchChats()
+  chatsStore.listenTo(conversationId.value) // no-op if already subscribed
   if (chat.value) {
     await chatsStore.fetchMessages(conversationId.value)
     await syncReceipts()
@@ -275,12 +291,33 @@ const poll = async () => {
   }
 }
 
-watch(() => messages.value.length, scrollToBottom)
-watch(conversationId, load)
+// a new message arrived (real-time, sent, or polled): scroll, and mark it read if it's from the friend
+watch(
+  () => messages.value.length,
+  () => {
+    scrollToBottom()
+    const last = messages.value[messages.value.length - 1]
+    if (last && chat.value && last.sender_id === chat.value.friend.id) syncReceipts()
+  },
+)
+
+// switching conversations: stop typing in the old one, then load the new one
+watch(conversationId, (_new, old) => {
+  if (old) chatsStore.sendStoppedTyping(old)
+  load()
+})
 
 onMounted(() => {
   load()
   timer = window.setInterval(poll, POLL_MS)
 })
-onBeforeUnmount(() => clearInterval(timer))
+
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  chatsStore.sendStoppedTyping(conversationId.value)
+  if (chatsStore.activeConversationId === conversationId.value) {
+    chatsStore.activeConversationId = null
+  }
+  // note: we do NOT leave the channel here, so the chat list keeps receiving updates
+})
 </script>

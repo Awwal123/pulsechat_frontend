@@ -89,12 +89,17 @@ import {
 } from '@heroicons/vue/24/outline'
 import PlusMenu from './PlusMenu.vue';
 import { useSearch } from '../../assets/composables/Usesearch.ts';
-
-
+import { useChatsStore } from '../../store/chats.ts'
+import { onMounted } from 'vue'
 // optional: views may still pass :activeTab, otherwise it comes from the route
 const props = defineProps<{ activeTab?: string }>()
 const route = useRoute()
+const chatsStore = useChatsStore()
 
+onMounted(() => {
+  // fetchChats also subscribes to every conversation's channel
+  if (!chatsStore.fetchedOnce && !chatsStore.loadingChats) chatsStore.fetchChats()
+})
 const tabs = [
   { id: 'chats', to: '/chats', label: 'Chats', icon: ChatBubbleOvalLeftEllipsisIcon },
   { id: 'groups', to: '/groups', label: 'Groups', icon: UserGroupIcon },

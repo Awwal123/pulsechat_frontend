@@ -9,6 +9,7 @@ import type {
   UpdateProfileRequest,
 } from "../types/api";
 import { authService } from "../services/api";
+import { useChatsStore } from "./chats";
 
 function readUser(): User | null {
   try {
@@ -41,6 +42,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function logout() {
+    useChatsStore().reset();
     token.value = null;
     user.value = null;
     localStorage.removeItem("token");

@@ -96,8 +96,8 @@ const router = useRouter()
 const chatsStore = useChatsStore()
 const { query: searchQuery } = useSearch()
 
-onMounted(() => chatsStore.fetchChats())
-
+// always refresh when the screen opens; silent once we already have data
+onMounted(() => chatsStore.fetchChats(chatsStore.fetchedOnce))
 const isSearching = computed(() => searchQuery.value.trim().length > 0)
 
 const filteredChats = computed(() => {
@@ -108,6 +108,7 @@ const filteredChats = computed(() => {
 })
 
 const preview = (chat: ChatListItem) => {
+  if (chatsStore.isTyping(chat.conversation_id)) return 'typing...'
   const m = chat.last_message
   if (!m) return 'No messages yet'
   const text = m.is_deleted ? 'This message was deleted' : (m.message ?? '')
