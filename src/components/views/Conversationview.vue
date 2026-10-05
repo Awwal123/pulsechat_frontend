@@ -53,7 +53,19 @@
     </div>
 
     <template v-else>
-      <div ref="scroller" class="flex-1 space-y-3 overflow-y-auto bg-chat-bg px-5 py-5">
+      <div
+        ref="scroller"
+        class="flex-1 space-y-3 overflow-y-auto bg-chat-bg px-5 py-5"
+        @scroll.passive="onScroll"
+      >
+        <!-- pagination: loading older messages (top of the thread) -->
+        <p
+          v-if="chatsStore.loadingOlderMessages[conversationId]"
+          class="text-center text-xs text-text-secondary"
+        >
+          Loading older messages...
+        </p>
+
         <p v-if="chatsStore.loadingMessages && !messages.length" class="text-center text-sm text-text-secondary">
           Loading messages...
         </p>
@@ -175,6 +187,7 @@ import type { ChatMessage } from '../../types/api.ts'
 
 const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=12'
 const POLL_MS = 30000 // real-time handles new messages now; polling is just a safety net
+const LOAD_OLDER_THRESHOLD = 80 // px from the top that triggers loading older messages
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -198,6 +211,41 @@ const canSubmit = computed(
 const scrollToBottom = async () => {
   await nextTick()
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
+}
+
+// ── pagination (load older messages when scrolling to the top) ──
+const loadOlder = async () => {
+  const el = scroller.value
+  if (!el || !chatsStore.canLoadOlder(conversationId.value)) return
+
+  // remember where we are so the thread doesn't jump after prepending
+  const prevHeight = el.scrollHeight
+  const prevTop = el.scrollTop
+
+  const ok = await chatsStore.loadOlderMessages(conversationId.value)
+  if (!ok) return
+
+  await nextTick()
+  el.scrollTop = el.scrollHeight - prevHeight + prevTop
+}
+
+const onScroll = () => {
+  if (scroller.value && scroller.value.scrollTop < LOAD_OLDER_THRESHOLD) loadOlder()
+}
+
+// if the first page doesn't fill the screen there is nothing to scroll,
+// so keep loading older pages until it does (or there are no more)
+const fillScreen = async () => {
+  await nextTick()
+  const el = scroller.value
+  if (
+    el &&
+    el.scrollHeight <= el.clientHeight &&
+    chatsStore.canLoadOlder(conversationId.value)
+  ) {
+    await loadOlder()
+    await fillScreen()
+  }
 }
 
 // ── typing indicator ────────────────────────────────────
@@ -275,7 +323,8 @@ const load = async () => {
     await chatsStore.fetchMessages(conversationId.value)
     await syncReceipts()
   }
-  scrollToBottom()
+  await scrollToBottom()
+  await fillScreen()
 }
 
 let timer: number | undefined
@@ -291,9 +340,12 @@ const poll = async () => {
   }
 }
 
-// a new message arrived (real-time, sent, or polled): scroll, and mark it read if it's from the friend
+// a NEW message arrived at the bottom (real-time, sent, or polled): scroll down,
+// and mark it read if it's from the friend.
+// Watching the last message id (not the length) means prepending older
+// messages does NOT trigger a scroll to the bottom.
 watch(
-  () => messages.value.length,
+  () => messages.value[messages.value.length - 1]?.id,
   () => {
     scrollToBottom()
     const last = messages.value[messages.value.length - 1]

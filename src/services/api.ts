@@ -196,13 +196,23 @@ export const conversationService = {
       .then((r) => r.data),
 
 
-  getMessages: (conversationId: number, silent = false) =>
-    api
-      .get<ApiResponse<ChatMessage[]>>(
-        `/conversations/${conversationId}/messages`,
-        { skipErrorToast: silent },
-      )
-      .then((r) => r.data),
+getMessages: (
+  conversationId: number,
+  silent = false,
+  page = 1,
+) =>
+  api
+    .get<ApiResponse<{
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+      data: ChatMessage[];
+    }>>(
+      `/conversations/${conversationId}/messages?page=${page}`,
+      { skipErrorToast: silent },
+    )
+    .then((r) => r.data),
 
   
 };

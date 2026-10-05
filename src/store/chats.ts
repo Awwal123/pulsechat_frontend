@@ -15,7 +15,9 @@ export const useChatsStore = defineStore("chats", () => {
   const readByFriend = ref<Record<number, boolean>>({}); // my messages the friend has read
   const activeConversationId = ref<number | null>(null); // the chat currently open on screen
   const typing = ref<Record<number, boolean>>({}); // is the friend typing, per conversation
-
+  const messagePages = ref<Record<number, number>>({});
+  const hasMoreMessages = ref<Record<number, boolean>>({});
+  const loadingOlderMessages = ref<Record<number, boolean>>({});
   // not reactive on purpose
   const handledIncoming = new Map<number, Set<number>>();
   const subscribed = new Set<number>();
@@ -45,16 +47,73 @@ export const useChatsStore = defineStore("chats", () => {
     messages.value[conversationId] ?? [];
 
   // ── messages ─────────────────────────────────────────
+  // Page 1 = newest messages. A normal fetch resets the thread to page 1.
+  // A silent fetch (polling) merges: it refreshes the newest page but keeps
+  // any older pages the user already loaded.
   async function fetchMessages(conversationId: number, silent = false) {
     loadingMessages.value = true;
+
     try {
       const res = await conversationService.getMessages(conversationId, silent);
-      messages.value[conversationId] = res.data;
+      const fresh = res.data.data;
+      const existing = messages.value[conversationId];
+      const loadedOlder = (messagePages.value[conversationId] ?? 1) > 1;
+
+      if (silent && existing?.length && loadedOlder) {
+        const firstFreshId = fresh[0]?.id ?? Infinity;
+        const older = existing.filter((m) => m.id < firstFreshId);
+        messages.value[conversationId] = [...older, ...fresh];
+        // leave messagePages / hasMoreMessages untouched
+      } else {
+        messages.value[conversationId] = fresh;
+        messagePages.value[conversationId] = res.data.current_page;
+        hasMoreMessages.value[conversationId] =
+          res.data.current_page < res.data.last_page;
+      }
+
       return true;
     } catch {
       return false;
     } finally {
       loadingMessages.value = false;
+    }
+  }
+
+  const canLoadOlder = (conversationId: number) =>
+    !!hasMoreMessages.value[conversationId] &&
+    !loadingOlderMessages.value[conversationId];
+
+  async function loadOlderMessages(conversationId: number) {
+    if (!canLoadOlder(conversationId)) return false;
+
+    loadingOlderMessages.value[conversationId] = true;
+
+    try {
+      const nextPage = (messagePages.value[conversationId] ?? 1) + 1;
+
+      const res = await conversationService.getMessages(
+        conversationId,
+        true, // silent: we show our own "loading older" indicator
+        nextPage,
+      );
+
+      const existingMessages = messages.value[conversationId] ?? [];
+      const existingIds = new Set(existingMessages.map((m) => m.id));
+      // de-dupe in case new messages shifted the page boundaries
+      const olderMessages = res.data.data.filter((m) => !existingIds.has(m.id));
+
+      messages.value[conversationId] = [...olderMessages, ...existingMessages];
+
+      messagePages.value[conversationId] = res.data.current_page;
+
+      hasMoreMessages.value[conversationId] =
+        res.data.current_page < res.data.last_page;
+
+      return true;
+    } catch {
+      return false;
+    } finally {
+      loadingOlderMessages.value[conversationId] = false;
     }
   }
 
@@ -339,6 +398,9 @@ export const useChatsStore = defineStore("chats", () => {
     typing.value = {};
     chats.value = [];
     messages.value = {};
+    messagePages.value = {};
+    hasMoreMessages.value = {};
+    loadingOlderMessages.value = {};
     readByFriend.value = {};
     activeConversationId.value = null;
     handledIncoming.clear();
@@ -351,6 +413,8 @@ export const useChatsStore = defineStore("chats", () => {
     fetchedOnce,
     messages,
     loadingMessages,
+    loadingOlderMessages,
+    hasMoreMessages,
     sending,
     mutating,
     activeConversationId,
@@ -358,6 +422,8 @@ export const useChatsStore = defineStore("chats", () => {
     getChat,
     getMessages,
     fetchMessages,
+    loadOlderMessages,
+    canLoadOlder,
     sendMessage,
     editMessage,
     deleteMessage,
