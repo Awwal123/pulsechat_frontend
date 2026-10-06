@@ -60,6 +60,11 @@ const routes = [
   { path: "/more", name: "More", component: MoreView },
   { path: "/friends/add", name: "AddFriend", component: AddFriendView },
   { path: "/groups/create", name: "CreateGroup", component: CreateGroupView },
+  {
+  path: '/chats/:id/members',
+  component: () => import('../components/views/GroupMembersView.vue'),
+  props: true,
+},
 ];
 
 const router = createRouter({

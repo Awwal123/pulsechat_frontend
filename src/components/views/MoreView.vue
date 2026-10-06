@@ -132,6 +132,10 @@ import {
   UserPlusIcon,
 } from '@heroicons/vue/24/outline'
 import MainLayout from '../layout/MainLayout.vue'
+import { storeToRefs } from 'pinia'
+import router from '../../router/index.ts'
+import { useAuthStore } from '../../store/auth.ts'
+import { useFriendsStore } from '../../store/friends.ts'
 
 /* ── theme (your toggle logic) ────────────────────── */
 // App already applies the saved theme on startup, so just read the current state
@@ -169,7 +173,13 @@ const todo = (key: string) => {
   console.log('open', key)
 }
 
-const logout = () => {
-  // TODO: clear auth state / token, then router.push('/login')
+const friends = useFriendsStore()
+const auth = useAuthStore()
+const { loggingOut } = storeToRefs(auth)
+const logout = async () => {
+  if (loggingOut.value) return
+  await auth.signOut()
+  friends.reset()
+  router.replace('/login')
 }
 </script>

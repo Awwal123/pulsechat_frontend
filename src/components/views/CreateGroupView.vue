@@ -1,7 +1,28 @@
 <template>
   <SubPageLayout title="Create Group">
     <div class="px-4 pt-6">
-      <label class="mb-2 block text-sm text-text-secondary">Name Group</label>
+      <!-- group photo -->
+      <div class="flex flex-col items-center">
+        <button
+          type="button"
+          aria-label="Choose group photo"
+          class="relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-chip text-text-secondary transition-transform active:scale-95"
+          @click="fileInput?.click()"
+        >
+          <img v-if="photoPreview" :src="photoPreview" alt="" class="h-full w-full object-cover" />
+          <CameraIcon v-else class="h-9 w-9" />
+          <span
+            v-if="uploading"
+            class="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-semibold text-white"
+          >
+            Uploading...
+          </span>
+        </button>
+        <p class="mt-2 text-xs text-text-secondary">Group photo (optional)</p>
+        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onPhotoPicked" />
+      </div>
+
+      <label class="mt-5 mb-2 block text-sm text-text-secondary">Name Group</label>
       <input
         v-model="name"
         type="text"
@@ -46,7 +67,7 @@
         :class="canCreate ? 'cursor-pointer active:scale-[0.98]' : 'cursor-not-allowed opacity-40 shadow-none'"
         @click="create"
       >
-        Create Group
+        {{ chatsStore.creatingGroup ? 'Creating...' : 'Create Group' }}
       </button>
     </template>
   </SubPageLayout>
@@ -86,7 +107,9 @@
             </PersonRow>
           </div>
         </li>
-        <li v-if="filteredContacts.length === 0" class="pt-10 text-center text-sm text-text-secondary">No contacts found</li>
+        <li v-if="filteredContacts.length === 0" class="pt-10 text-center text-sm text-text-secondary">
+          No contacts found
+        </li>
       </ul>
     </div>
 
@@ -112,20 +135,85 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CheckIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { CameraIcon, CheckIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import SubPageLayout from '../layout/SubPageLayout.vue'
 import BottomSheet from '../../assets/components/BottomSheet.vue'
 import PersonRow from '../../assets/components/PersonRow.vue'
-import { useContacts, type Person } from '../../assets/composables/Usecontacts.ts'
+import { useAuthStore } from '../../store/auth.ts'
+import { useChatsStore } from '../../store/chats.ts'
+import { FALLBACK_AVATAR } from '../../utils/chatDisplay.ts'
+
+interface Candidate {
+  id: number // the friend's user id, which is what the API expects in member_ids
+  name: string
+  phone: string
+  avatar: string
+}
 
 const router = useRouter()
-const { contacts } = useContacts()
+const auth = useAuthStore()
+const chatsStore = useChatsStore()
+
+onMounted(() => {
+  if (!chatsStore.fetchedOnce) chatsStore.fetchChats()
+})
+
+// people you can add = friends you already have a private chat with
+const contacts = computed<Candidate[]>(() =>
+  chatsStore.chats
+    .filter((c) => c.type === 'private' && c.friend)
+    .map((c) => ({
+      id: c.friend!.id,
+      name: c.friend!.name,
+      phone: c.friend!.phone,
+      avatar: c.friend!.profile_picture || FALLBACK_AVATAR,
+    })),
+)
 
 const name = ref('')
-const members = ref<Person[]>([])
-const canCreate = computed(() => name.value.trim().length > 0 && members.value.length > 0)
+const members = ref<Candidate[]>([])
+
+/* group photo: upload as soon as it's picked, send the URL on create */
+const fileInput = ref<HTMLInputElement | null>(null)
+const photoPreview = ref('')
+const photoUrl = ref('')
+const uploading = ref(false)
+
+const clearPreview = () => {
+  if (photoPreview.value) URL.revokeObjectURL(photoPreview.value)
+  photoPreview.value = ''
+}
+
+const onPhotoPicked = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // lets the user pick the same file again
+  if (!file || uploading.value) return
+
+  clearPreview()
+  photoPreview.value = URL.createObjectURL(file) // instant preview while uploading
+  photoUrl.value = ''
+  uploading.value = true
+  try {
+    const url = await auth.uploadPhoto(file)
+    if (url) photoUrl.value = url
+    else clearPreview() // upload failed, so go back to the camera icon
+  } finally {
+    uploading.value = false
+  }
+}
+
+onBeforeUnmount(clearPreview)
+
+const canCreate = computed(
+  () =>
+    name.value.trim().length > 0 &&
+    members.value.length > 0 &&
+    !uploading.value &&
+    !chatsStore.creatingGroup,
+)
 
 /* bottom sheet: edit a draft, only apply it on "Add" */
 const sheetOpen = ref(false)
@@ -136,7 +224,11 @@ const searchFocused = ref(false)
 const filteredContacts = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return contacts.value
-  return contacts.value.filter((c) => c.name.toLowerCase().includes(q) || c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '§'))
+  return contacts.value.filter(
+    (c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '§'),
+  )
 })
 
 const openSheet = () => {
@@ -155,9 +247,13 @@ const remove = (id: number) => {
   members.value = members.value.filter((m) => m.id !== id)
 }
 
-const create = () => {
+const create = async () => {
   if (!canCreate.value) return
-  // TODO: POST { name: name.value.trim(), memberIds: members.value.map(m => m.id) }
-  router.push('/groups')
+  const conversationId = await chatsStore.createGroup({
+    name: name.value.trim(),
+    member_ids: members.value.map((m) => m.id),
+    ...(photoUrl.value ? { profile_picture: photoUrl.value } : {}),
+  })
+  if (conversationId) router.replace(`/chats/${conversationId}`)
 }
 </script>

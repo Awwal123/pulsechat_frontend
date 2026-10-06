@@ -1,8 +1,20 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { conversationService, messageService } from "../services/api.ts";
-import type { ChatListItem, ChatMessage, LastMessage } from "../types/api.ts";
+import { toast } from "vue-sonner";
+import {
+  conversationService,
+  groupService,
+  messageService,
+} from "../services/api.ts";
+import type {
+  ChatListItem,
+  ChatMessage,
+  CreateGroupRequest,
+  GroupMember,
+  LastMessage,
+} from "../types/api.ts";
 import echo from "../echo.js";
+import { useAuthStore } from "./auth.ts";
 
 export const useChatsStore = defineStore("chats", () => {
   const chats = ref<ChatListItem[]>([]);
@@ -12,17 +24,25 @@ export const useChatsStore = defineStore("chats", () => {
   const loadingMessages = ref(false);
   const sending = ref(false);
   const mutating = ref(false); // edit / delete in progress
-  const readByFriend = ref<Record<number, boolean>>({}); // my messages the friend has read
+  const creatingGroup = ref(false);
+  const readByFriend = ref<Record<number, boolean>>({}); // my messages someone else has read
   const activeConversationId = ref<number | null>(null); // the chat currently open on screen
-  const typing = ref<Record<number, boolean>>({}); // is the friend typing, per conversation
+  const typing = ref<Record<number, Record<number, string>>>({}); // conversationId -> { userId: name } // is someone typing, per conversation
   const messagePages = ref<Record<number, number>>({});
   const hasMoreMessages = ref<Record<number, boolean>>({});
   const loadingOlderMessages = ref<Record<number, boolean>>({});
+
   // not reactive on purpose
   const handledIncoming = new Map<number, Set<number>>();
   const subscribed = new Set<number>();
-  const typingTimers = new Map<number, number>();
+  const typingTimers = new Map<string, number>(); // key: "conversationId:userId"
   const lastWhisperAt = new Map<number, number>();
+ const groupMembers = ref<Record<number, GroupMember[]>>({});
+const loadingMembers = ref(false);
+const addingMembers = ref(false);
+  // who am I? (auth store is read lazily to avoid a circular-import problem)
+  const myId = () => useAuthStore().user?.id ?? 0;
+  const isMine = (senderId: number) => senderId === myId();
 
   // ── chats ────────────────────────────────────────────
   async function fetchChats(silent = false) {
@@ -46,6 +66,56 @@ export const useChatsStore = defineStore("chats", () => {
   const getMessages = (conversationId: number) =>
     messages.value[conversationId] ?? [];
 
+  // ── groups ───────────────────────────────────────────
+  // returns the new conversation id, or null if it failed
+  async function createGroup(payload: CreateGroupRequest) {
+    if (creatingGroup.value) return null;
+    creatingGroup.value = true;
+    try {
+      const res = await groupService.create(payload);
+      await fetchChats(true); // loads the group in list shape and subscribes its channel
+      toast.success(res.message);
+      return res.data.id;
+    } catch {
+      return null; // the interceptor already toasted the error
+    } finally {
+      creatingGroup.value = false;
+    }
+  }
+
+  const getMembers = (conversationId: number) =>
+    groupMembers.value[conversationId] ?? [];
+
+  async function fetchMembers(conversationId: number) {
+    loadingMembers.value = true;
+    try {
+      const res = await groupService.members(conversationId);
+      groupMembers.value[conversationId] = res.data;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      loadingMembers.value = false;
+    }
+  }
+
+  async function addMembers(conversationId: number, memberIds: number[]) {
+    if (addingMembers.value || !memberIds.length) return false;
+    addingMembers.value = true;
+    try {
+      const res = await groupService.addMembers(conversationId, {
+        member_ids: memberIds,
+      });
+      // refresh the member list and the chat list (member_count changed)
+      await Promise.all([fetchMembers(conversationId), fetchChats(true)]);
+      toast.success(res.message);
+      return true;
+    } catch {
+      return false; // the interceptor already toasted the error
+    } finally {
+      addingMembers.value = false;
+    }
+  }
   // ── messages ─────────────────────────────────────────
   // Page 1 = newest messages. A normal fetch resets the thread to page 1.
   // A silent fetch (polling) merges: it refreshes the newest page but keeps
@@ -234,38 +304,71 @@ export const useChatsStore = defineStore("chats", () => {
   }
 
   // ── typing indicator ─────────────────────────────────
-  // friend side: show "typing..." and auto-clear if the signal stops
-  function setTyping(conversationId: number, on: boolean) {
-    clearTimeout(typingTimers.get(conversationId));
-    typingTimers.delete(conversationId);
-    typing.value[conversationId] = on;
+  // someone else is typing: show "typing..." and auto-clear if the signal stops
+  // ── typing indicator ─────────────────────────────────
+  // someone else started/stopped typing; auto-clears if their signal stops
+  function setTyping(
+    conversationId: number,
+    userId: number,
+    name: string,
+    on: boolean,
+  ) {
+    const key = `${conversationId}:${userId}`;
+    clearTimeout(typingTimers.get(key));
+    typingTimers.delete(key);
+
+    const current = { ...(typing.value[conversationId] ?? {}) };
     if (on) {
+      current[userId] = name;
       typingTimers.set(
-        conversationId,
-        window.setTimeout(() => (typing.value[conversationId] = false), 3000),
+        key,
+        window.setTimeout(
+          () => setTyping(conversationId, userId, name, false),
+          3000,
+        ),
       );
+    } else {
+      delete current[userId];
     }
+    typing.value[conversationId] = current;
   }
 
-  const isTyping = (conversationId: number) => !!typing.value[conversationId];
+  const isTyping = (conversationId: number) =>
+    Object.keys(typing.value[conversationId] ?? {}).length > 0;
 
-  // my side: tell the friend I'm typing (throttled to one whisper every 2s)
+  // "Ameer is typing..." / "Ameer and Tobi are typing..." / "" when nobody is
+  const typingLabel = (conversationId: number) => {
+    const names = Object.values(typing.value[conversationId] ?? {}).map(
+      (n) => n.trim().split(" ")[0] || "Someone",
+    );
+    if (names.length === 0) return "";
+    if (names.length === 1) return `${names[0]} is typing...`;
+    if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+    return `${names[0]} and ${names.length - 1} others are typing...`;
+  };
+
+  // my side: tell the others I'm typing (name + id travel with the whisper)
+  function whisperTyping(conversationId: number, on: boolean) {
+    const me = useAuthStore().user;
+    echo.private(`conversation.${conversationId}`).whisper("typing", {
+      typing: on,
+      user_id: me?.id ?? 0,
+      name: me?.name ?? "",
+    });
+  }
+
+  // throttled to one whisper every 2s
   function sendTyping(conversationId: number) {
     const now = Date.now();
     if (now - (lastWhisperAt.get(conversationId) ?? 0) < 2000) return;
     lastWhisperAt.set(conversationId, now);
-    echo
-      .private(`conversation.${conversationId}`)
-      .whisper("typing", { typing: true });
+    whisperTyping(conversationId, true);
   }
 
   function sendStoppedTyping(conversationId: number) {
     lastWhisperAt.delete(conversationId);
-    echo
-      .private(`conversation.${conversationId}`)
-      .whisper("typing", { typing: false });
+    whisperTyping(conversationId, false);
   }
-
   // ── real-time ────────────────────────────────────────
   // Called for every `message.sent` event, for any conversation.
   function receiveMessage(raw: ChatMessage) {
@@ -289,8 +392,8 @@ export const useChatsStore = defineStore("chats", () => {
       return;
     }
 
-    const incoming = msg.sender_id === chat.friend.id;
-    if (incoming) setTyping(conversationId, false); // they sent it, so they stopped typing
+    const incoming = !isMine(msg.sender_id);
+    if (incoming) setTyping(conversationId, msg.sender_id, "", false); // they sent it, so they stopped typing /
 
     if (chat.last_message && chat.last_message.id >= msg.id) return; // already handled
 
@@ -308,9 +411,13 @@ export const useChatsStore = defineStore("chats", () => {
       .listen(".message.sent", (event: { message: ChatMessage }) => {
         receiveMessage(event.message);
       })
-      .listenForWhisper("typing", (e: { typing: boolean }) => {
-        setTyping(conversationId, e.typing);
-      });
+      .listenForWhisper(
+        "typing",
+        (e: { typing: boolean; user_id: number; name: string }) => {
+          if (e.user_id === myId()) return; // ignore my own other devices
+          setTyping(conversationId, e.user_id, e.name, e.typing);
+        },
+      );
   }
 
   function listenToAll() {
@@ -323,14 +430,14 @@ export const useChatsStore = defineStore("chats", () => {
   }
 
   // ── read receipts ────────────────────────────────────
-  // Mark the friend's messages as read. First time we open a chat, only the last
+  // Mark other people's messages as read. First time we open a chat, only the last
   // `unread_count` incoming messages are unread; afterwards anything new gets marked.
-  async function markIncomingAsRead(conversationId: number, friendId: number) {
+  async function markIncomingAsRead(conversationId: number) {
     const chat = getChat(conversationId);
     if (!chat) return;
 
     const incoming = getMessages(conversationId).filter(
-      (m) => m.sender_id === friendId && !m.is_deleted,
+      (m) => !isMine(m.sender_id) && !m.is_deleted,
     );
 
     let seen = handledIncoming.get(conversationId);
@@ -359,10 +466,11 @@ export const useChatsStore = defineStore("chats", () => {
     if (results.every((r) => r.status === "fulfilled")) chat.unread_count = 0;
   }
 
-  // Check which of my messages the friend has read (drives the double tick).
-  async function refreshReadReceipts(conversationId: number, friendId: number) {
+  // Check which of my messages someone else has read (drives the double tick).
+  // In a group, one reader is enough.
+  async function refreshReadReceipts(conversationId: number) {
     const mine = getMessages(conversationId).filter(
-      (m) => m.sender_id !== friendId && !m.is_deleted,
+      (m) => isMine(m.sender_id) && !m.is_deleted,
     );
     const unknown = mine.filter((m) => !readByFriend.value[m.id]).slice(-20);
 
@@ -370,7 +478,7 @@ export const useChatsStore = defineStore("chats", () => {
       unknown.map(async (m) => {
         try {
           const res = await messageService.getReadStatus(m.id);
-          if (res.data.some((r) => r.user_id === friendId))
+          if (res.data.some((r) => r.user_id !== myId()))
             readByFriend.value[m.id] = true;
         } catch {
           /* ignore, try again on the next refresh */
@@ -405,6 +513,7 @@ export const useChatsStore = defineStore("chats", () => {
     activeConversationId.value = null;
     handledIncoming.clear();
     fetchedOnce.value = false;
+    groupMembers.value = {};
   }
 
   return {
@@ -415,12 +524,22 @@ export const useChatsStore = defineStore("chats", () => {
     loadingMessages,
     loadingOlderMessages,
     hasMoreMessages,
+    creatingGroup,
     sending,
     mutating,
     activeConversationId,
+    isMine,
+    typingLabel,
     fetchChats,
     getChat,
+
     getMessages,
+    createGroup,
+    loadingMembers,
+    addingMembers,
+    getMembers,
+    fetchMembers,
+    addMembers,
     fetchMessages,
     loadOlderMessages,
     canLoadOlder,

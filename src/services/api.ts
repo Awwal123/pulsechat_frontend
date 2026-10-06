@@ -23,6 +23,9 @@ import type {
   DeletedMessage,
   MessageReadStatus,
   ReadReceipt,
+  CreateGroupRequest,
+  GroupMember,
+  GroupMemberRecord,
 } from "../types/api";
 import { useAuthStore } from "../store/auth";
 import router from "../router";
@@ -245,4 +248,40 @@ export const messageService = {
       .delete<ApiResponse<DeletedMessage>>(`/messages/${messageId}/delete-message`)
       .then((r) => r.data),
 };
+
+export const notificationService = {
+  saveDeviceToken: (token: string) =>
+    api
+      .post<ApiResponse<null>>("/device-tokens", { token })
+      .then((r) => r.data),
+};
+
+
+export const groupService = {
+  create: async (payload: CreateGroupRequest) => {
+    const res = await api.post("/groups", payload);
+    return res.data as {
+      status: string;
+      message: string;
+      data: { id: number; name: string; profile_picture: string | null };
+    };
+  },
+members: (conversationId: number) =>
+  api
+    .get<ApiResponse<GroupMemberRecord[]>>(`/groups/${conversationId}/members`)
+    .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
+
+addMembers: (conversationId: number, payload: { member_ids: number[] }) =>
+  api
+    .post<ApiResponse<GroupMemberRecord[]>>(`/groups/${conversationId}/members`, payload)
+    .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
+};
+
+const toMember = (m: GroupMemberRecord): GroupMember => ({
+  id: m.user.id,
+  name: m.user.name,
+  phone: m.user.phone,
+  profile_picture: m.user.profile_picture,
+  role: m.role,
+});
 export default api;

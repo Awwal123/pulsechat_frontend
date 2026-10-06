@@ -10,6 +10,8 @@ import type {
 } from "../types/api";
 import { authService } from "../services/api";
 import { useChatsStore } from "./chats";
+import { setupNotifications } from "../services/notification";
+import { compressImage } from "../utils/image";
 
 function readUser(): User | null {
   try {
@@ -39,6 +41,10 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = newUser;
     localStorage.setItem("token", newToken);
     localStorage.setItem("user", JSON.stringify(newUser));
+  }
+
+  async function setupUserNotifications() {
+    await setupNotifications();
   }
 
   function logout() {
@@ -72,8 +78,10 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const res = await authService.verifyOtp({ phone, otp, purpose });
       toast.success(res.message);
-      if (res.data.token && res.data.user)
+      if (res.data.token && res.data.user) {
         setSession(res.data.token, res.data.user);
+        await setupUserNotifications();
+      }
       return res.data;
     } catch {
       return null;
@@ -107,10 +115,26 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function uploadPhoto(file: File): Promise<string | null> {
+    let ready: File;
     try {
-      const res = await authService.uploadImage(file);
+      ready = await compressImage(file);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Could not read that image.",
+      );
+      return null;
+    }
+
+    try {
+      const res = await authService.uploadImage(ready);
       return res.data.url;
-    } catch {
+    } catch (e: any) {
+      // the interceptor already toasts; this shows the real reason in the console
+      console.error(
+        "Image upload failed:",
+        e?.response?.status,
+        e?.response?.data ?? e,
+      );
       return null;
     }
   }
@@ -135,6 +159,8 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const res = await authService.verifyPin({ phone, security_pin });
       setSession(res.data.token, res.data.user);
+      await setupUserNotifications();
+
       toast.success(res.message);
       return true;
     } catch {
@@ -149,6 +175,8 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const res = await authService.register(payload);
       setSession(res.data.token, res.data.user);
+      await setupUserNotifications();
+
       toast.success(res.message);
       return true;
     } catch {

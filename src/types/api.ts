@@ -118,12 +118,35 @@ export interface FriendRecord {
   friend: FriendProfile;
 }
 
+export interface GroupMember {
+  id: number; // user id
+  name: string;
+  phone: string;
+  profile_picture: string | null;
+  role: "admin" | "member";
+}
 
+// what the API actually returns for each member
+export interface GroupMemberRecord {
+  id: number; // membership row id (not the user id)
+  conversation_id: number;
+  user_id: number;
+  role: "admin" | "member";
+  user: {
+    id: number;
+    name: string;
+    phone: string;
+    profile_picture: string | null;
+  };
+}
 export interface ChatListItem {
   conversation_id: number;
   type: "private" | "group";
-  friend: FriendProfile;
+  friend: FriendProfile | null; // null for groups
+  group: GroupProfile | null; // null for private chats
   last_message: LastMessage | null;
+  last_message_at: string | null;
+  unread_count: number;
 }
 
 export interface MessageSender extends FriendProfile {
@@ -160,16 +183,18 @@ export interface LastMessage {
   created_at: string;
   is_deleted: boolean;
 }
-
-export interface ChatListItem {
-  conversation_id: number;
-  type: "private" | "group";
-  friend: FriendProfile;
-  last_message: LastMessage | null;
-  last_message_at: string | null;
-  unread_count: number;
+export interface GroupProfile {
+  name: string;
+  profile_picture: string | null;
+  member_count: number;
 }
 
+
+export interface CreateGroupRequest {
+  name: string;
+  member_ids: number[];
+  profile_picture?: string;
+}
 // ── messages ────────────────────────────────────────────
 export interface MessageSender extends FriendProfile {
   email?: string;

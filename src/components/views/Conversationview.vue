@@ -21,23 +21,40 @@
         </button>
       </div>
 
-      <div v-if="chat" class="flex items-center gap-3 border-b border-text-secondary/30 py-4">
+      <!-- tapping the header of a group opens the members screen -->
+      <div
+        v-if="chat"
+        class="flex items-center gap-3 border-b border-text-secondary/30 py-4"
+        :class="isGroup ? 'cursor-pointer' : ''"
+        @click="openMembers"
+      >
         <img
-          :src="chat.friend.profile_picture || FALLBACK_AVATAR"
-          :alt="chat.friend.name"
+          v-if="avatar"
+          :src="avatar"
+          :alt="title"
           class="h-11 w-11 shrink-0 rounded-full object-cover"
         />
+        <div
+          v-else
+          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chip text-text-secondary"
+        >
+          <UserGroupIcon class="h-6 w-6" />
+        </div>
+
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[15px] font-bold text-text-primary">{{ chat.friend.name }}</p>
+          <p class="truncate text-[15px] font-bold text-text-primary">{{ title }}</p>
           <p
             class="truncate text-xs font-medium"
             :class="chatsStore.isTyping(conversationId) ? 'text-accent' : 'text-text-secondary'"
           >
-            {{ chatsStore.isTyping(conversationId) ? 'typing...' : chat.friend.phone }}
+            {{ subtitle }}
           </p>
         </div>
-        <button type="button" aria-label="Video call" class="cursor-pointer text-text-primary"><VideoCameraIcon class="h-7 w-7" /></button>
-        <button type="button" aria-label="Voice call" class="ml-3 cursor-pointer text-text-primary"><PhoneIcon class="h-6 w-6" /></button>
+
+        <template v-if="chat.type === 'private'">
+          <button type="button" aria-label="Video call" class="cursor-pointer text-text-primary"><VideoCameraIcon class="h-7 w-7" /></button>
+          <button type="button" aria-label="Voice call" class="ml-3 cursor-pointer text-text-primary"><PhoneIcon class="h-6 w-6" /></button>
+        </template>
       </div>
     </header>
 
@@ -58,14 +75,9 @@
         class="flex-1 space-y-3 overflow-y-auto bg-chat-bg px-5 py-5"
         @scroll.passive="onScroll"
       >
-        <!-- pagination: loading older messages (top of the thread) -->
-        <p
-          v-if="chatsStore.loadingOlderMessages[conversationId]"
-          class="text-center text-xs text-text-secondary"
-        >
+        <p v-if="chatsStore.loadingOlderMessages[conversationId]" class="text-center text-xs text-text-secondary">
           Loading older messages...
         </p>
-
         <p v-if="chatsStore.loadingMessages && !messages.length" class="text-center text-sm text-text-secondary">
           Loading messages...
         </p>
@@ -73,15 +85,45 @@
           No messages yet. Say hi 👋
         </p>
 
-        <ChatBubble
-          v-for="m in messages"
-          :key="m.id"
-          :message="m"
-          :mine="m.sender_id !== chat.friend.id"
-          :read="chatsStore.isReadByFriend(m.id)"
-          :friend-id="chat.friend.id"
-          @menu="openMenu"
-        />
+        <template v-for="(m, i) in messages" :key="m.id">
+          <!-- group: other people's messages get their avatar and name -->
+          <div v-if="isGroup && !chatsStore.isMine(m.sender_id)" class="flex items-end gap-2">
+            <img
+              v-if="showAvatar(i)"
+              :src="senderPic(m)"
+              :alt="senderName(m)"
+              class="h-8 w-8 shrink-0 rounded-full object-cover"
+            />
+            <div v-else class="w-8 shrink-0" />
+
+            <div class="min-w-0 flex-1">
+              <p
+                v-if="showName(i)"
+                class="mb-1 ml-1 truncate text-xs font-bold"
+                :style="{ color: nameColor(m.sender_id) }"
+              >
+                {{ senderName(m) }}
+              </p>
+              <ChatBubble
+                :message="m"
+                :mine="false"
+                :read="chatsStore.isReadByFriend(m.id)"
+                :friend-id="m.sender_id"
+                @menu="openMenu"
+              />
+            </div>
+          </div>
+
+          <!-- private chats, and my own messages in groups -->
+          <ChatBubble
+            v-else
+            :message="m"
+            :mine="chatsStore.isMine(m.sender_id)"
+            :read="chatsStore.isReadByFriend(m.id)"
+            :friend-id="chat.friend?.id ?? 0"
+            @menu="openMenu"
+          />
+        </template>
       </div>
 
       <!-- editing banner -->
@@ -177,6 +219,7 @@ import {
   PhoneIcon,
   PlusIcon,
   TrashIcon,
+  UserGroupIcon,
   VideoCameraIcon,
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
@@ -184,8 +227,8 @@ import { PaperAirplaneIcon } from '@heroicons/vue/24/solid'
 import ChatBubble from '../../assets/components/ChatBubble.vue'
 import { useChatsStore } from '../../store/chats.ts'
 import type { ChatMessage } from '../../types/api.ts'
+import { FALLBACK_AVATAR, chatAvatar, chatName } from '../../utils/chatDisplay.ts'
 
-const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=12'
 const POLL_MS = 30000 // real-time handles new messages now; polling is just a safety net
 const LOAD_OLDER_THRESHOLD = 80 // px from the top that triggers loading older messages
 
@@ -196,6 +239,8 @@ const chatsStore = useChatsStore()
 const conversationId = computed(() => Number(props.id))
 const chat = computed(() => chatsStore.getChat(conversationId.value))
 const messages = computed(() => chatsStore.getMessages(conversationId.value))
+const isGroup = computed(() => chat.value?.type === 'group')
+const members = computed(() => chatsStore.getMembers(conversationId.value))
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
@@ -208,12 +253,55 @@ const canSubmit = computed(
   () => !!draft.value.trim() && !chatsStore.sending && !chatsStore.mutating,
 )
 
+// ── header ──────────────────────────────────────────────
+const title = computed(() => (chat.value ? chatName(chat.value) : ''))
+const avatar = computed(() => (chat.value ? chatAvatar(chat.value) : null))
+
+// "Alex, Dev, Director, You" (first names; falls back to a count until members load)
+const membersLine = computed(() => {
+  if (!members.value.length) return `${chat.value?.group?.member_count ?? 0} members`
+  const others = members.value
+    .filter((m) => !chatsStore.isMine(m.id))
+    .map((m) => m.name.trim().split(' ')[0] || m.name)
+  return [...others, 'You'].join(', ')
+})
+
+const subtitle = computed(() => {
+  const c = chat.value
+  if (!c) return ''
+  const label = chatsStore.typingLabel(conversationId.value)
+  if (label) return label
+  return c.type === 'group' ? membersLine.value : (c.friend?.phone ?? '')
+})
+
+const openMembers = () => {
+  if (isGroup.value) router.push(`/chats/${conversationId.value}/members`)
+}
+
+// ── group message helpers ───────────────────────────────
+const memberById = computed(() => new Map(members.value.map((m) => [m.id, m])))
+
+const senderName = (m: ChatMessage) =>
+  memberById.value.get(m.sender_id)?.name || m.sender?.name || 'Unknown'
+
+const senderPic = (m: ChatMessage) =>
+  memberById.value.get(m.sender_id)?.profile_picture ||
+  m.sender?.profile_picture ||
+  FALLBACK_AVATAR
+
+// name above the first message of a run, avatar beside the last one
+const showName = (i: number) => messages.value[i - 1]?.sender_id !== messages.value[i]?.sender_id
+const showAvatar = (i: number) => messages.value[i + 1]?.sender_id !== messages.value[i]?.sender_id
+
+const NAME_COLORS = ['#f97316', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#eab308', '#ef4444', '#6366f1']
+const nameColor = (userId: number) => NAME_COLORS[userId % NAME_COLORS.length]
+
+// ── scrolling + pagination (load older messages at the top) ──
 const scrollToBottom = async () => {
   await nextTick()
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
 
-// ── pagination (load older messages when scrolling to the top) ──
 const loadOlder = async () => {
   const el = scroller.value
   if (!el || !chatsStore.canLoadOlder(conversationId.value)) return
@@ -307,10 +395,9 @@ const removeMessage = async () => {
 // ── load + keep in sync ─────────────────────────────────
 const syncReceipts = async () => {
   if (!chat.value) return
-  const friendId = chat.value.friend.id
   await Promise.all([
-    chatsStore.markIncomingAsRead(conversationId.value, friendId),
-    chatsStore.refreshReadReceipts(conversationId.value, friendId),
+    chatsStore.markIncomingAsRead(conversationId.value),
+    chatsStore.refreshReadReceipts(conversationId.value),
   ])
 }
 
@@ -318,8 +405,10 @@ const load = async () => {
   cancelEdit()
   chatsStore.activeConversationId = conversationId.value
   if (!chatsStore.fetchedOnce) await chatsStore.fetchChats()
+  else if (!chat.value) await chatsStore.fetchChats(true) // e.g. a group that was just created
   chatsStore.listenTo(conversationId.value) // no-op if already subscribed
   if (chat.value) {
+    if (chat.value.type === 'group') chatsStore.fetchMembers(conversationId.value) // not awaited, so messages load fast
     await chatsStore.fetchMessages(conversationId.value)
     await syncReceipts()
   }
@@ -341,7 +430,7 @@ const poll = async () => {
 }
 
 // a NEW message arrived at the bottom (real-time, sent, or polled): scroll down,
-// and mark it read if it's from the friend.
+// and mark it read if it's from someone else.
 // Watching the last message id (not the length) means prepending older
 // messages does NOT trigger a scroll to the bottom.
 watch(
@@ -349,7 +438,7 @@ watch(
   () => {
     scrollToBottom()
     const last = messages.value[messages.value.length - 1]
-    if (last && chat.value && last.sender_id === chat.value.friend.id) syncReceipts()
+    if (last && chat.value && !chatsStore.isMine(last.sender_id)) syncReceipts()
   },
 )
 
