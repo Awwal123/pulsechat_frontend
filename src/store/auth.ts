@@ -32,9 +32,16 @@ export const useAuthStore = defineStore("auth", () => {
   const registering = ref(false);
   const updatingProfile = ref(false);
   const loggingOut = ref(false);
-  // getter
   const isAuthenticated = computed(() => !!token.value);
+  const pendingEmail = ref<string | null>(
+    sessionStorage.getItem("pending_email"),
+  );
 
+  function setPendingEmail(email: string | null) {
+    pendingEmail.value = email;
+    if (email) sessionStorage.setItem("pending_email", email);
+    else sessionStorage.removeItem("pending_email");
+  }
   // session helpers
   function setSession(newToken: string, newUser: User) {
     token.value = newToken;
@@ -49,6 +56,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   function logout() {
     useChatsStore().reset();
+    setPendingEmail(null);
     token.value = null;
     user.value = null;
     localStorage.removeItem("token");
@@ -56,10 +64,20 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   // OTP
-  async function sendOtp(phone: string, purpose: OtpPurpose) {
+  async function sendOtp(phone: string, purpose: OtpPurpose, email?: string) {
     sendingOtp.value = true;
     try {
-      const res = await authService.sendOtp({ phone, purpose });
+      // "Resend code" on the OTP screen doesn't know the email, so fall back to the saved one
+      const registerEmail =
+        purpose === "register" ? (email ?? pendingEmail.value) : undefined;
+
+      const res = await authService.sendOtp({
+        phone,
+        purpose,
+        ...(registerEmail ? { email: registerEmail } : {}),
+      });
+
+      if (registerEmail) setPendingEmail(registerEmail);
       toast.success(res.message);
       return true;
     } catch {
@@ -170,11 +188,18 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  async function register(payload: RegisterRequest) {
+  async function register(payload: Omit<RegisterRequest, "email">) {
+    const email = pendingEmail.value;
+    if (!email) {
+      toast.error("Email is missing. Please go back and enter your email.");
+      return false;
+    }
+
     registering.value = true;
     try {
-      const res = await authService.register(payload);
+      const res = await authService.register({ ...payload, email });
       setSession(res.data.token, res.data.user);
+      setPendingEmail(null);
       await setupUserNotifications();
 
       toast.success(res.message);
@@ -196,6 +221,8 @@ export const useAuthStore = defineStore("auth", () => {
     updatingProfile,
     loggingOut,
     isAuthenticated,
+    pendingEmail,
+    setPendingEmail,
     updateProfile,
     uploadPhoto,
     setSession,

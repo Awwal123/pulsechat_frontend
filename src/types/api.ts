@@ -39,6 +39,7 @@ export type OtpPurpose = "login" | "register";
 export interface SendOtpRequest {
   phone: string;
   purpose: OtpPurpose;
+  email?: string;
 }
 
 export interface VerifyOtpRequest {
@@ -66,6 +67,7 @@ export interface VerifyPinRequest {
 export interface RegisterRequest {
   phone: string;
   name: string;
+  email: string;
   profile_picture?: string;
   security_pin?: string;
 }

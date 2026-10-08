@@ -1,6 +1,6 @@
 <template>
   <div class="flex min-h-screen flex-col bg-page">
-    <AuthHeader :mode="mode" heading="Enter OTP Code" :subheading="`Sent to : (+44) ${formatted}`" />
+   <AuthHeader :mode="mode" heading="Enter OTP Code" :subheading="sentTo" />
 
     <main class="flex-1 px-4 pt-10">
       <div class="mb-12 flex items-center justify-center gap-4 text-sm">
@@ -67,13 +67,14 @@ const RESEND_AFTER = 60
 
 const auth = useAuthStore()
 const { sendingOtp, verifyingOtp } = storeToRefs(auth)
-const { digits, formatted } = usePhone()
+const { digits } = usePhone()
 const code = reactive<string[]>(Array(LENGTH).fill(''))
 const inputs = ref<HTMLInputElement[]>([])
 const activeIndex = ref(0)
 const isComplete = computed(() => code.every((c) => c !== ''))
 
 const focusAt = (i: number) => inputs.value[Math.max(0, Math.min(LENGTH - 1, i))]?.focus()
+
 
 const onInput = (i: number, e: Event) => {
   const el = e.target as HTMLInputElement
@@ -137,6 +138,16 @@ const resend = async () => {
   }
 }
 
+const maskEmail = (email: string) => {
+  const [name = '', domain = ''] = email.split('@')
+  return `${name.slice(0, 2)}${'*'.repeat(Math.max(1, name.length - 2))}@${domain}`
+}
+
+const sentTo = computed(() =>
+  props.mode === 'register' && auth.pendingEmail
+    ? `Sent to : ${maskEmail(auth.pendingEmail)}`
+    : 'Sent to the email on your account',
+)
 onMounted(() => {
   focusAt(0)
   startTimer()
