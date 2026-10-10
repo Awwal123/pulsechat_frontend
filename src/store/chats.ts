@@ -38,6 +38,7 @@ export const useChatsStore = defineStore("chats", () => {
   // not reactive on purpose
   const handledIncoming = new Map<number, Set<number>>();
   const subscribed = new Set<number>();
+  let subscribedUserId: number | null = null; // my personal channel (friend events)
   const typingTimers = new Map<string, number>(); // key: "conversationId:userId"
   const lastWhisperAt = new Map<number, number>();
   let tempId = -1; // temporary ids for unsent messages are negative, so they never clash with real ones
@@ -443,15 +444,20 @@ export const useChatsStore = defineStore("chats", () => {
       else list.push(msg);
     }
 
-    // 1b) the recipient is looking at this chat right now: mark it read at once,
-    // so the sender's ticks update immediately instead of at the next poll
+    // 1b) the recipient is looking at this chat right now: mark THIS message read
+    // at once, so the sender's ticks update immediately instead of at the next poll
     if (
       !isMine(msg.sender_id) &&
+      !msg.is_deleted &&
       activeConversationId.value === conversationId &&
-      handledIncoming.has(conversationId) &&
       !document.hidden
     ) {
-      markIncomingAsRead(conversationId);
+      messageService
+        .markAsRead(msg.id)
+        .then(() => handledIncoming.get(conversationId)?.add(msg.id))
+        .catch(() => {
+          /* the next markIncomingAsRead will retry it */
+        });
     }
 
     // 2) update the chat list
@@ -494,13 +500,28 @@ export const useChatsStore = defineStore("chats", () => {
       );
   }
 
+  // my personal channel: lets the server tell me "someone accepted your friend request"
+  // so the new conversation shows up in my chat list without a refresh
+  function listenToUser() {
+    const id = myId();
+    if (!id || subscribedUserId === id) return;
+    if (subscribedUserId !== null) echo.leave(`user.${subscribedUserId}`);
+    subscribedUserId = id;
+    echo.private(`user.${id}`).listen(".friend.accepted", () => {
+      fetchChats(true); // loads the new chat and subscribes to its channel
+    });
+  }
+
   function listenToAll() {
+    listenToUser();
     chats.value.forEach((c) => listenTo(c.conversation_id));
   }
 
   function stopListening() {
     subscribed.forEach((id) => echo.leave(`conversation.${id}`));
     subscribed.clear();
+    if (subscribedUserId !== null) echo.leave(`user.${subscribedUserId}`);
+    subscribedUserId = null;
   }
 
   // ── read receipts ────────────────────────────────────

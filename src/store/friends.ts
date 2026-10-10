@@ -2,7 +2,12 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { toast } from "vue-sonner";
 import { friendService } from "../services/api.ts";
-import type { FriendUser, IncomingFriendRequest, RespondAction } from "../types/api.ts";
+import type {
+  FriendSuggestion,
+  FriendUser,
+  IncomingFriendRequest,
+  RespondAction,
+} from "../types/api.ts";
 
 export const useFriendsStore = defineStore("friends", () => {
   // search
@@ -18,7 +23,16 @@ export const useFriendsStore = defineStore("friends", () => {
   const sendingTo = ref<number | null>(null);
   const responding = ref<{ id: number; action: RespondAction } | null>(null);
 
+  // suggestions
+  const suggestions = ref<FriendSuggestion[]>([]); // short preview list (random)
+  const loadingSuggestions = ref(false);
+  const allSuggestions = ref<FriendSuggestion[]>([]); // full list, loaded page by page
+  const loadingAll = ref(false);
+  const allPage = ref(0);
+  const allLastPage = ref(1);
+
   const pendingCount = computed(() => requests.value.length);
+  const hasMoreAll = computed(() => allPage.value < allLastPage.value);
 
   async function search(phone: string) {
     const token = ++searchToken;
@@ -88,16 +102,71 @@ export const useFriendsStore = defineStore("friends", () => {
     }
   }
 
+  // ── suggestions ──────────────────────────────────────
+  // a few random people (the featured account is always first)
+  async function fetchSuggestions() {
+    if (loadingSuggestions.value) return false;
+    loadingSuggestions.value = true;
+    try {
+      const res = await friendService.getSuggestions(10);
+      suggestions.value = res.data;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      loadingSuggestions.value = false;
+    }
+  }
+
+  // everyone the user can still add, one page at a time (page 1 resets the list)
+  async function fetchAllSuggestions(page = 1) {
+    if (loadingAll.value) return false;
+    loadingAll.value = true;
+    try {
+      const res = await friendService.getAllSuggestions(page);
+      const incoming = res.data.data;
+
+      if (page === 1) {
+        allSuggestions.value = incoming;
+      } else {
+        const known = new Set(allSuggestions.value.map((s) => s.id));
+        allSuggestions.value = [
+          ...allSuggestions.value,
+          ...incoming.filter((s) => !known.has(s.id)),
+        ];
+      }
+
+      allPage.value = res.data.current_page;
+      allLastPage.value = res.data.last_page;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      loadingAll.value = false;
+    }
+  }
+
+  const loadMoreSuggestions = () =>
+    hasMoreAll.value
+      ? fetchAllSuggestions(allPage.value + 1)
+      : Promise.resolve(false);
+
   // call on logout so the next user doesn't see this user's data
   function reset() {
     clearSearch();
     requests.value = [];
     sentIds.value = [];
+    suggestions.value = [];
+    allSuggestions.value = [];
+    allPage.value = 0;
+    allLastPage.value = 1;
   }
 
   return {
     searchResult, searching, hasSearched,
     requests, loadingRequests, sentIds, sendingTo, responding, pendingCount,
-    search, clearSearch, sendRequest, fetchRequests, respond, reset,
+    suggestions, loadingSuggestions, allSuggestions, loadingAll, hasMoreAll,
+    search, clearSearch, sendRequest, fetchRequests, respond,
+    fetchSuggestions, fetchAllSuggestions, loadMoreSuggestions, reset,
   };
 });

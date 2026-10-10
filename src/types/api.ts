@@ -222,6 +222,20 @@ export interface ChatMessage {
   pending?: boolean;
 }
 
+export interface FriendSuggestion {
+  id: number
+  name: string
+  profile_picture: string | null
+  is_featured: boolean
+}
+
+export interface SuggestionsPage {
+  data: FriendSuggestion[]
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+}
 
 export interface ReadReceipt {
   id: number;

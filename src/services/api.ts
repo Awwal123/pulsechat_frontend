@@ -26,6 +26,8 @@ import type {
   CreateGroupRequest,
   GroupMember,
   GroupMemberRecord,
+  FriendSuggestion,
+  SuggestionsPage,
 } from "../types/api";
 import { useAuthStore } from "../store/auth";
 import router from "../router";
@@ -174,11 +176,25 @@ export const friendService = {
       >(`/friends/respond-request/${requestId}`, { action })
       .then((r) => r.data),
 
-       getFriends: (silent = false) =>
+  getFriends: (silent = false) =>
     api
       .get<ApiResponse<FriendRecord[]>>("/friends/get-friends", {
         skipErrorToast: silent,
       })
+      .then((r) => r.data),
+
+  getSuggestions: (limit = 10 ) =>
+    api
+      .get<
+        ApiResponse<FriendSuggestion[]>
+      >("/friends/suggestions", { params: { limit } /* + your silent option */ })
+      .then((r) => r.data),
+
+  getAllSuggestions: (page = 1) =>
+    api
+      .get<
+        ApiResponse<SuggestionsPage>
+      >("/friends/suggestions/all", { params: { page } /* + your silent option */ })
       .then((r) => r.data),
 };
 
@@ -192,60 +208,54 @@ export const conversationService = {
 
   sendMessage: (conversationId: number, payload: SendMessagePayload) =>
     api
-      .post<ApiResponse<ChatMessage>>(
-        `/conversations/${conversationId}/messages`,
-        payload,
-      )
+      .post<
+        ApiResponse<ChatMessage>
+      >(`/conversations/${conversationId}/messages`, payload)
       .then((r) => r.data),
 
-
-getMessages: (
-  conversationId: number,
-  silent = false,
-  page = 1,
-) =>
-  api
-    .get<ApiResponse<{
-      current_page: number;
-      last_page: number;
-      per_page: number;
-      total: number;
-      data: ChatMessage[];
-    }>>(
-      `/conversations/${conversationId}/messages?page=${page}`,
-      { skipErrorToast: silent },
-    )
-    .then((r) => r.data),
-
-  
+  getMessages: (conversationId: number, silent = false, page = 1) =>
+    api
+      .get<
+        ApiResponse<{
+          current_page: number;
+          last_page: number;
+          per_page: number;
+          total: number;
+          data: ChatMessage[];
+        }>
+      >(`/conversations/${conversationId}/messages?page=${page}`, {
+        skipErrorToast: silent,
+      })
+      .then((r) => r.data),
 };
 
 export const messageService = {
   markAsRead: (message_id: number) =>
     api
-      .post<ApiResponse<ReadReceipt>>(
-        "/messages/mark-as-read",
-        { message_id },
-        { skipErrorToast: true },
-      )
+      .post<
+        ApiResponse<ReadReceipt>
+      >("/messages/mark-as-read", { message_id }, { skipErrorToast: true })
       .then((r) => r.data),
 
   getReadStatus: (messageId: number) =>
     api
-      .get<ApiResponse<MessageReadStatus[]>>(
-        `/messages/${messageId}/read-status`,
-        { skipErrorToast: true },
-      )
+      .get<
+        ApiResponse<MessageReadStatus[]>
+      >(`/messages/${messageId}/read-status`, { skipErrorToast: true })
       .then((r) => r.data),
 
   edit: (messageId: number, message: string) =>
     api
-      .put<ApiResponse<ChatMessage>>(`/messages/${messageId}/edit-message`, { message })
+      .put<
+        ApiResponse<ChatMessage>
+      >(`/messages/${messageId}/edit-message`, { message })
       .then((r) => r.data),
 
   remove: (messageId: number) =>
     api
-      .delete<ApiResponse<DeletedMessage>>(`/messages/${messageId}/delete-message`)
+      .delete<
+        ApiResponse<DeletedMessage>
+      >(`/messages/${messageId}/delete-message`)
       .then((r) => r.data),
 };
 
@@ -256,7 +266,6 @@ export const notificationService = {
       .then((r) => r.data),
 };
 
-
 export const groupService = {
   create: async (payload: CreateGroupRequest) => {
     const res = await api.post("/groups", payload);
@@ -266,15 +275,19 @@ export const groupService = {
       data: { id: number; name: string; profile_picture: string | null };
     };
   },
-members: (conversationId: number) =>
-  api
-    .get<ApiResponse<GroupMemberRecord[]>>(`/groups/${conversationId}/members`)
-    .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
+  members: (conversationId: number) =>
+    api
+      .get<
+        ApiResponse<GroupMemberRecord[]>
+      >(`/groups/${conversationId}/members`)
+      .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
 
-addMembers: (conversationId: number, payload: { member_ids: number[] }) =>
-  api
-    .post<ApiResponse<GroupMemberRecord[]>>(`/groups/${conversationId}/members`, payload)
-    .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
+  addMembers: (conversationId: number, payload: { member_ids: number[] }) =>
+    api
+      .post<
+        ApiResponse<GroupMemberRecord[]>
+      >(`/groups/${conversationId}/members`, payload)
+      .then((r) => ({ ...r.data, data: r.data.data.map(toMember) })),
 };
 
 const toMember = (m: GroupMemberRecord): GroupMember => ({

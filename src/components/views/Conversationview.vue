@@ -438,7 +438,9 @@ watch(
   () => {
     scrollToBottom()
     const last = messages.value[messages.value.length - 1]
-    if (last && chat.value && !chatsStore.isMine(last.sender_id)) syncReceipts()
+    if (last && chat.value && !chatsStore.isMine(last.sender_id)) {
+      chatsStore.markIncomingAsRead(conversationId.value)
+    }
   },
 )
 
