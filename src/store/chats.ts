@@ -12,6 +12,7 @@ import type {
   CreateGroupRequest,
   GroupMember,
   LastMessage,
+  MessageSender,
 } from "../types/api.ts";
 import echo from "../echo.js";
 import { useAuthStore } from "./auth.ts";
@@ -22,24 +23,25 @@ export const useChatsStore = defineStore("chats", () => {
   const fetchedOnce = ref(false);
   const messages = ref<Record<number, ChatMessage[]>>({});
   const loadingMessages = ref(false);
-  const sending = ref(false);
   const mutating = ref(false); // edit / delete in progress
   const creatingGroup = ref(false);
   const readByFriend = ref<Record<number, boolean>>({}); // my messages someone else has read
   const activeConversationId = ref<number | null>(null); // the chat currently open on screen
-  const typing = ref<Record<number, Record<number, string>>>({}); // conversationId -> { userId: name } // is someone typing, per conversation
+  const typing = ref<Record<number, Record<number, string>>>({}); // conversationId -> { userId: name }
   const messagePages = ref<Record<number, number>>({});
   const hasMoreMessages = ref<Record<number, boolean>>({});
   const loadingOlderMessages = ref<Record<number, boolean>>({});
+  const groupMembers = ref<Record<number, GroupMember[]>>({});
+  const loadingMembers = ref(false);
+  const addingMembers = ref(false);
 
   // not reactive on purpose
   const handledIncoming = new Map<number, Set<number>>();
   const subscribed = new Set<number>();
   const typingTimers = new Map<string, number>(); // key: "conversationId:userId"
   const lastWhisperAt = new Map<number, number>();
- const groupMembers = ref<Record<number, GroupMember[]>>({});
-const loadingMembers = ref(false);
-const addingMembers = ref(false);
+  let tempId = -1; // temporary ids for unsent messages are negative, so they never clash with real ones
+
   // who am I? (auth store is read lazily to avoid a circular-import problem)
   const myId = () => useAuthStore().user?.id ?? 0;
   const isMine = (senderId: number) => senderId === myId();
@@ -116,26 +118,29 @@ const addingMembers = ref(false);
       addingMembers.value = false;
     }
   }
+
   // ── messages ─────────────────────────────────────────
   // Page 1 = newest messages. A normal fetch resets the thread to page 1.
   // A silent fetch (polling) merges: it refreshes the newest page but keeps
   // any older pages the user already loaded.
+  // Messages still being sent (pending) are always kept, so a refresh never makes them vanish.
   async function fetchMessages(conversationId: number, silent = false) {
     loadingMessages.value = true;
 
     try {
       const res = await conversationService.getMessages(conversationId, silent);
       const fresh = res.data.data;
-      const existing = messages.value[conversationId];
+      const existing = messages.value[conversationId] ?? [];
+      const inFlight = existing.filter((m) => m.pending);
       const loadedOlder = (messagePages.value[conversationId] ?? 1) > 1;
 
-      if (silent && existing?.length && loadedOlder) {
+      if (silent && existing.length && loadedOlder) {
         const firstFreshId = fresh[0]?.id ?? Infinity;
-        const older = existing.filter((m) => m.id < firstFreshId);
-        messages.value[conversationId] = [...older, ...fresh];
+        const older = existing.filter((m) => m.id < firstFreshId && !m.pending);
+        messages.value[conversationId] = [...older, ...fresh, ...inFlight];
         // leave messagePages / hasMoreMessages untouched
       } else {
-        messages.value[conversationId] = fresh;
+        messages.value[conversationId] = [...fresh, ...inFlight];
         messagePages.value[conversationId] = res.data.current_page;
         hasMoreMessages.value[conversationId] =
           res.data.current_page < res.data.last_page;
@@ -173,9 +178,7 @@ const addingMembers = ref(false);
       const olderMessages = res.data.data.filter((m) => !existingIds.has(m.id));
 
       messages.value[conversationId] = [...olderMessages, ...existingMessages];
-
       messagePages.value[conversationId] = res.data.current_page;
-
       hasMoreMessages.value[conversationId] =
         res.data.current_page < res.data.last_page;
 
@@ -222,37 +225,86 @@ const addingMembers = ref(false);
     chats.value = [chat, ...chats.value.filter((c) => c !== chat)];
   }
 
+  // OPTIMISTIC SEND: the message appears instantly (with a clock), then is
+  // swapped for the real one when the server answers.
   async function sendMessage(
     conversationId: number,
     text: string,
     replyToId?: number,
   ) {
-    if (sending.value) return false;
-    sending.value = true;
+    const me = useAuthStore().user;
+    if (!me) return false;
+
+    // 1) show it right away
+    const id = tempId--;
+    const now = new Date().toISOString();
+    const quoted = replyToId
+      ? (getMessages(conversationId).find((m) => m.id === replyToId) ?? null)
+      : null;
+
+    const temp: ChatMessage = {
+      id,
+      conversation_id: conversationId,
+      sender_id: me.id,
+      message: text,
+      reply_to_id: replyToId ?? null,
+      edited_at: null,
+      deleted_at: null,
+      is_deleted: false,
+      created_at: now,
+      updated_at: now,
+      sender: me as unknown as MessageSender,
+      reply_to: quoted,
+      pending: true,
+    };
+    (messages.value[conversationId] ??= []).push(temp);
+
+    const chat = getChat(conversationId);
+    const prevLast = chat?.last_message ? { ...chat.last_message } : null;
+    const prevAt = chat?.last_message_at ?? null;
+    if (chat) bumpChat(chat, temp);
+
+    // 2) send in the background
     try {
       const res = await conversationService.sendMessage(conversationId, {
         message: text,
         ...(replyToId ? { reply_to_id: replyToId } : {}),
       });
-      const msg: ChatMessage = {
+      const real: ChatMessage = {
         ...res.data,
         edited_at: res.data.edited_at ?? null,
         deleted_at: res.data.deleted_at ?? null,
         is_deleted: res.data.is_deleted ?? false,
         reply_to: res.data.reply_to ?? null,
+        pending: false,
       };
 
-      // the websocket event can beat the HTTP response, so don't add it twice
       const list = (messages.value[conversationId] ??= []);
-      if (!list.some((m) => m.id === msg.id)) list.push(msg);
+      const tempIndex = list.findIndex((m) => m.id === id);
+      // the websocket event can beat the HTTP response
+      const realAlreadyThere = list.some((m) => m.id === real.id);
 
-      const chat = getChat(conversationId);
-      if (chat) bumpChat(chat, msg);
+      if (realAlreadyThere) {
+        if (tempIndex !== -1) list.splice(tempIndex, 1);
+      } else if (tempIndex !== -1) {
+        list[tempIndex] = real;
+      } else {
+        list.push(real); // a refresh removed the temp one while we were waiting
+      }
+
+      const c = getChat(conversationId);
+      if (c?.last_message?.id === id) c.last_message.id = real.id;
       return true;
     } catch {
+      // failed: remove the temp bubble (the view puts the text back in the input)
+      const list = messages.value[conversationId] ?? [];
+      const i = list.findIndex((m) => m.id === id);
+      if (i !== -1) list.splice(i, 1);
+      if (chat) {
+        chat.last_message = prevLast;
+        chat.last_message_at = prevAt;
+      }
       return false;
-    } finally {
-      sending.value = false;
     }
   }
 
@@ -261,7 +313,7 @@ const addingMembers = ref(false);
     messageId: number,
     text: string,
   ) {
-    if (mutating.value) return false;
+    if (mutating.value || messageId < 0) return false;
     mutating.value = true;
     try {
       const res = await messageService.edit(messageId, text);
@@ -281,7 +333,7 @@ const addingMembers = ref(false);
   }
 
   async function deleteMessage(conversationId: number, messageId: number) {
-    if (mutating.value) return false;
+    if (mutating.value || messageId < 0) return false;
     mutating.value = true;
     try {
       const res = await messageService.remove(messageId);
@@ -303,8 +355,6 @@ const addingMembers = ref(false);
     }
   }
 
-  // ── typing indicator ─────────────────────────────────
-  // someone else is typing: show "typing..." and auto-clear if the signal stops
   // ── typing indicator ─────────────────────────────────
   // someone else started/stopped typing; auto-clears if their signal stops
   function setTyping(
@@ -369,6 +419,7 @@ const addingMembers = ref(false);
     lastWhisperAt.delete(conversationId);
     whisperTyping(conversationId, false);
   }
+
   // ── real-time ────────────────────────────────────────
   // Called for every `message.sent` event, for any conversation.
   function receiveMessage(raw: ChatMessage) {
@@ -383,7 +434,25 @@ const addingMembers = ref(false);
 
     // 1) add to the open thread (only if that thread is already loaded)
     const list = messages.value[conversationId];
-    if (list && !list.some((m) => m.id === msg.id)) list.push(msg);
+    if (list && !list.some((m) => m.id === msg.id)) {
+      // my own message coming back over the websocket: replace the pending bubble
+      const pendingIdx = isMine(msg.sender_id)
+        ? list.findIndex((m) => m.pending && m.message === msg.message)
+        : -1;
+      if (pendingIdx !== -1) list[pendingIdx] = msg;
+      else list.push(msg);
+    }
+
+    // 1b) the recipient is looking at this chat right now: mark it read at once,
+    // so the sender's ticks update immediately instead of at the next poll
+    if (
+      !isMine(msg.sender_id) &&
+      activeConversationId.value === conversationId &&
+      handledIncoming.has(conversationId) &&
+      !document.hidden
+    ) {
+      markIncomingAsRead(conversationId);
+    }
 
     // 2) update the chat list
     const chat = getChat(conversationId);
@@ -393,7 +462,7 @@ const addingMembers = ref(false);
     }
 
     const incoming = !isMine(msg.sender_id);
-    if (incoming) setTyping(conversationId, msg.sender_id, "", false); // they sent it, so they stopped typing /
+    if (incoming) setTyping(conversationId, msg.sender_id, "", false); // they sent it, so they stopped typing
 
     if (chat.last_message && chat.last_message.id >= msg.id) return; // already handled
 
@@ -411,6 +480,11 @@ const addingMembers = ref(false);
       .listen(".message.sent", (event: { message: ChatMessage }) => {
         receiveMessage(event.message);
       })
+      .listen(
+        ".message.read",
+        (e: { conversation_id: number; message_id: number; user_id: number }) =>
+          receiveRead(e),
+      )
       .listenForWhisper(
         "typing",
         (e: { typing: boolean; user_id: number; name: string }) => {
@@ -437,7 +511,7 @@ const addingMembers = ref(false);
     if (!chat) return;
 
     const incoming = getMessages(conversationId).filter(
-      (m) => !isMine(m.sender_id) && !m.is_deleted,
+      (m) => !isMine(m.sender_id) && !m.is_deleted && m.id > 0,
     );
 
     let seen = handledIncoming.get(conversationId);
@@ -467,10 +541,10 @@ const addingMembers = ref(false);
   }
 
   // Check which of my messages someone else has read (drives the double tick).
-  // In a group, one reader is enough.
+  // In a group, one reader is enough. Unsent messages (negative ids) are skipped.
   async function refreshReadReceipts(conversationId: number) {
     const mine = getMessages(conversationId).filter(
-      (m) => isMine(m.sender_id) && !m.is_deleted,
+      (m) => isMine(m.sender_id) && !m.is_deleted && m.id > 0,
     );
     const unknown = mine.filter((m) => !readByFriend.value[m.id]).slice(-20);
 
@@ -494,6 +568,22 @@ const addingMembers = ref(false);
     mine.forEach((m) => {
       if (m.id <= newestRead) readByFriend.value[m.id] = true;
     });
+  }
+
+  // someone else read a message (`message.read` event): tick it, and everything
+  // of mine before it, instantly. Same "newer read implies older read" rule as above.
+  function receiveRead(e: {
+    conversation_id: number;
+    message_id: number;
+    user_id: number;
+  }) {
+    if (e.user_id === myId()) return; // my own read, from another device
+    readByFriend.value[e.message_id] = true;
+    for (const m of getMessages(e.conversation_id)) {
+      if (isMine(m.sender_id) && m.id > 0 && m.id <= e.message_id) {
+        readByFriend.value[m.id] = true;
+      }
+    }
   }
 
   const isReadByFriend = (messageId: number) => !!readByFriend.value[messageId];
@@ -525,14 +615,12 @@ const addingMembers = ref(false);
     loadingOlderMessages,
     hasMoreMessages,
     creatingGroup,
-    sending,
     mutating,
     activeConversationId,
     isMine,
     typingLabel,
     fetchChats,
     getChat,
-
     getMessages,
     createGroup,
     loadingMembers,

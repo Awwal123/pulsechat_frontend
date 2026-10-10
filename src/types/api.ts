@@ -219,6 +219,7 @@ export interface ChatMessage {
   updated_at: string;
   sender: MessageSender;
   reply_to?: ChatMessage | null; // the quoted message (same shape)
+  pending?: boolean;
 }
 
 

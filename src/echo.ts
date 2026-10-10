@@ -10,6 +10,7 @@ declare global {
 window.Pusher = Pusher
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const authUrl = `${apiBaseUrl!.replace(/\/api\/?$/, '')}/broadcasting/auth`
 
 const echo = new Echo({
   broadcaster: 'reverb',
@@ -25,23 +26,44 @@ const echo = new Echo({
       socketId: string,
       callback: (error: Error | null, data: any) => void,
     ) => {
-      fetch(`${apiBaseUrl!.replace(/\/api\/?$/, '')}/broadcasting/auth`, {
+      const token = localStorage.getItem('token')
+
+      // No token = the request can never authenticate; fail fast.
+      if (!token) {
+        callback(new Error('Broadcast auth skipped: no auth token'), null)
+        return
+      }
+
+      fetch(authUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           socket_id: socketId,
           channel_name: channel.name,
         }),
       })
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) {
             throw new Error(`Broadcast auth failed (${res.status})`)
           }
-          return res.json()
+
+          let json: any = null
+          try {
+            json = JSON.parse(await res.text())
+          } catch {
+            /* not JSON */
+          }
+
+          // A 200 without { auth: "<key>:<signature>" } is not a successful auth.
+          if (!json?.auth) {
+            throw new Error('Broadcast auth returned no signature')
+          }
+
+          return json
         })
         .then((data) => callback(null, data))
         .catch((err) => callback(err, null))

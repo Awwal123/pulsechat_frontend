@@ -250,7 +250,7 @@ const editing = ref<ChatMessage | null>(null)
 const menu = ref<{ message: ChatMessage; top: number } | null>(null)
 
 const canSubmit = computed(
-  () => !!draft.value.trim() && !chatsStore.sending && !chatsStore.mutating,
+  () => !!draft.value.trim() && !chatsStore.mutating,
 )
 
 // ── header ──────────────────────────────────────────────

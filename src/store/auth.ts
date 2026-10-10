@@ -42,6 +42,7 @@ export const useAuthStore = defineStore("auth", () => {
     if (email) sessionStorage.setItem("pending_email", email);
     else sessionStorage.removeItem("pending_email");
   }
+
   // session helpers
   function setSession(newToken: string, newUser: User) {
     token.value = newToken;
@@ -50,8 +51,13 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem("user", JSON.stringify(newUser));
   }
 
-  async function setupUserNotifications() {
-    await setupNotifications();
+  // Push setup is slow (permission prompt, token, registering it on the backend).
+  // Run it in the background so login/navigation never waits for it,
+  // and never let a failure here break the login.
+  function setupUserNotifications() {
+    setupNotifications().catch((e) =>
+      console.warn("Notification setup failed:", e),
+    );
   }
 
   function logout() {
@@ -98,7 +104,7 @@ export const useAuthStore = defineStore("auth", () => {
       toast.success(res.message);
       if (res.data.token && res.data.user) {
         setSession(res.data.token, res.data.user);
-        await setupUserNotifications();
+        setupUserNotifications(); // background, no await
       }
       return res.data;
     } catch {
@@ -177,7 +183,7 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const res = await authService.verifyPin({ phone, security_pin });
       setSession(res.data.token, res.data.user);
-      await setupUserNotifications();
+      setupUserNotifications(); // background, no await
 
       toast.success(res.message);
       return true;
@@ -200,7 +206,7 @@ export const useAuthStore = defineStore("auth", () => {
       const res = await authService.register({ ...payload, email });
       setSession(res.data.token, res.data.user);
       setPendingEmail(null);
-      await setupUserNotifications();
+      setupUserNotifications(); // background, no await
 
       toast.success(res.message);
       return true;
@@ -210,6 +216,7 @@ export const useAuthStore = defineStore("auth", () => {
       registering.value = false;
     }
   }
+
   return {
     token,
     user,

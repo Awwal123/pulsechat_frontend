@@ -36,9 +36,24 @@
         <span v-if="message.edited_at && !message.is_deleted">edited</span>
         <span>{{ formatChatTime(message.created_at) }}</span>
 
-        <!-- ticks: 1 = sent, 2 = read -->
+        <!-- clock while the message is still being sent -->
         <svg
-          v-if="mine && !message.is_deleted"
+          v-if="mine && message.pending"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          class="h-3.5 w-3.5 text-white/60"
+          aria-label="Sending"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+
+        <!-- ticks once sent: 1 = sent, 2 = read -->
+        <svg
+          v-else-if="mine && !message.is_deleted"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -58,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import type { ChatMessage } from '../../types/api.ts'
 import { formatChatTime } from '../../utils/formatTime.ts'
 
@@ -74,7 +89,10 @@ const emit = defineEmits<{ (e: 'menu', message: ChatMessage, rect: DOMRect): voi
 const el = ref<HTMLElement | null>(null)
 let timer: number | undefined
 
-const canAct = computed(() => props.mine && !props.message.is_deleted)
+// only my own, already-sent, non-deleted messages get the Edit/Delete menu
+const canAct = computed(
+  () => props.mine && !props.message.is_deleted && !props.message.pending,
+)
 
 const replyAuthor = computed(() => {
   const r = props.message.reply_to
@@ -86,10 +104,14 @@ const open = () => {
   if (!canAct.value || !el.value) return
   emit('menu', props.message, el.value.getBoundingClientRect())
 }
+
 const start = () => {
   if (!canAct.value) return
   clearTimeout(timer)
   timer = window.setTimeout(open, 400) // long-press
 }
+
 const cancel = () => clearTimeout(timer)
+
+onBeforeUnmount(cancel)
 </script>
