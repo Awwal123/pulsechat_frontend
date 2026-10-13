@@ -31,7 +31,6 @@
       </div>
     </div>
 
-    <!-- ── find by phone ─────────────────────────────── -->
     <section v-if="tab === 'find'" class="px-4 pt-5">
       <label
         class="flex h-14 items-center gap-3 rounded-2xl border-2 bg-field px-4 transition-colors"
@@ -51,12 +50,11 @@
         />
       </label>
 
-      <!-- searching -->
       <div v-if="searching" class="flex flex-col items-center pt-20 text-center">
         <p class="animate-pulse text-sm font-semibold text-text-secondary">Searching…</p>
       </div>
 
-      <!-- result -->
+     
       <ul v-else-if="searchResult" class="mt-4 space-y-3">
         <li class="flex items-center gap-3 rounded-2xl bg-chip/60 p-3">
           <img
@@ -92,7 +90,7 @@
         </li>
       </ul>
 
-      <!-- empty state: searched with no match, or there is nobody to suggest -->
+
       <div
         v-else-if="hasSearched || (!loadingSuggestions && suggestions.length === 0)"
         class="flex flex-col items-center pt-20 text-center"
@@ -114,7 +112,7 @@
         </p>
       </div>
 
-      <!-- suggestions (shown while the search box is idle) -->
+
       <div v-else class="mt-5">
         <div class="mb-3 flex items-center justify-between">
           <h2 class="text-sm font-bold text-text-primary">People you may know</h2>
@@ -182,7 +180,7 @@
           </li>
         </ul>
 
-        <!-- paging for the full list -->
+
         <button
           v-if="showAll && hasMoreAll"
           type="button"
@@ -195,14 +193,12 @@
       </div>
     </section>
 
-    <!-- ── incoming requests ─────────────────────────── -->
+
     <section v-else class="px-4 pt-5">
-      <!-- loading -->
       <div v-if="loadingRequests && requests.length === 0" class="flex flex-col items-center pt-20 text-center">
         <p class="animate-pulse text-sm font-semibold text-text-secondary">Loading requests…</p>
       </div>
 
-      <!-- empty state -->
       <div v-else-if="requests.length === 0" class="flex flex-col items-center pt-20 text-center">
         <div class="flex h-36 w-36 items-center justify-center rounded-full bg-accent/10 text-accent/40">
           <InboxIcon class="h-16 w-16" />
@@ -236,7 +232,6 @@
             </div>
           </div>
 
-          <!-- accept / reject, right under the request -->
           <div class="mt-4 flex gap-3">
             <button
               type="button"
@@ -305,7 +300,6 @@ const formatted = computed(() =>
 
 const onInput = (e: Event) => {
   const el = e.target as HTMLInputElement
-  // drop a leading 0 so 0801... and 801... both work
   digits.value = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10)
   el.value = formatted.value
 }

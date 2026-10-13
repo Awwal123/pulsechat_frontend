@@ -16,7 +16,6 @@
       />
     </ul>
 
-    <!-- empty state: searching with no match, or no chats yet -->
     <div
       v-else
       data-tour="chat-empty"
@@ -58,7 +57,7 @@ import { chatName } from '../../utils/chatDisplay.ts'
 const chatsStore = useChatsStore()
 const { query: searchQuery } = useSearch()
 
-// always refresh when the screen opens; silent once we already have data
+
 onMounted(() => chatsStore.fetchChats(chatsStore.fetchedOnce))
 
 const isSearching = computed(() => searchQuery.value.trim().length > 0)
