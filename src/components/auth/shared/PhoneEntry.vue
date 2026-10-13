@@ -39,7 +39,7 @@
           type="tel"
           inputmode="numeric"
           autocomplete="tel-national"
-          placeholder="00 0000 0000"
+          placeholder="90 3500 8000"
           class="w-full min-w-0 bg-transparent text-[19px] text-ink outline-none placeholder:text-muted/70"
           @input="onInput"
           @focus="focused = true"
