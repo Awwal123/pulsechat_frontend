@@ -1,14 +1,12 @@
 <template>
   <SubPageLayout title="About Pulse Chat">
     <div class="px-4 pb-10 pt-6">
-      <!-- hero -->
       <section class="rise flex flex-col items-center text-center" style="--d: 0ms">
         <div class="flex h-32 w-32 items-center justify-center rounded-full bg-accent/10">
           <div class="flex h-24 w-24 items-center justify-center rounded-full bg-linear-to-b from-accent to-accent-dark shadow-lg">
             <ChatBubbleLeftRightIcon class="h-12 w-12 text-white" />
           </div>
         </div>
-
         <h2 class="mt-5 text-2xl font-extrabold text-text-primary">
           Pulse <span class="text-accent">Chat</span>
         </h2>
@@ -17,8 +15,6 @@
           Version {{ VERSION }}
         </span>
       </section>
-
-      <!-- about -->
       <section class="rise mt-8 rounded-2xl bg-chip/60 p-5" style="--d: 120ms">
         <h3 class="text-base font-bold text-text-primary">About Pulse Chat</h3>
         <p class="mt-2 text-[15px] leading-relaxed text-text-secondary">
@@ -27,8 +23,6 @@
           essentials of everyday communication into one place.
         </p>
       </section>
-
-      <!-- what it does -->
       <section class="mt-6">
         <h3 class="rise px-1 text-sm font-bold uppercase tracking-wide text-text-secondary" style="--d: 220ms">
           What you can do
@@ -48,13 +42,15 @@
           </li>
         </ul>
       </section>
-
-      <!-- developer -->
       <section class="rise mt-6 rounded-2xl bg-chip/60 p-5" style="--d: 700ms">
         <div class="flex items-center gap-3">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-accent to-accent-dark text-xl font-extrabold text-white shadow-md">
-            A
-          </div>
+       <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-b from-accent to-accent-dark shadow-md">
+  <img
+    :src="Ameer"
+    alt="Ameer"
+    class="h-full w-full object-cover"
+  />
+</div>
           <div class="min-w-0">
             <p class="truncate text-base font-bold text-text-primary">Ameer</p>
             <p class="flex items-center gap-1.5 text-xs font-semibold text-accent">
@@ -84,7 +80,7 @@ import {
   UserPlusIcon,
 } from '@heroicons/vue/24/outline'
 import SubPageLayout from '../../components/layout/SubPageLayout.vue'
-
+import Ameer from "../images/ameer.jpg"
 const VERSION = '2.1.0' 
 const year = new Date().getFullYear()
 
