@@ -154,7 +154,7 @@
               <div
                 class="flex h-12 cursor-not-allowed items-center gap-3 rounded-xl border border-text-secondary/30 bg-field/50 px-4 opacity-60"
               >
-                s
+                
                 <svg
                   class="h-5 w-7 shrink-0 rounded-sm"
                   viewBox="0 0 60 30"
