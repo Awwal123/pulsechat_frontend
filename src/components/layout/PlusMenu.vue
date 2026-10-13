@@ -2,6 +2,7 @@
   <div ref="root" class="relative">
     <button
       type="button"
+      data-tour="plus-button"
       :aria-label="open ? 'Close menu' : 'Open menu'"
       class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-white transition-colors"
       :class="open ? 'bg-white/20' : 'hover:bg-white/10'"
@@ -22,6 +23,7 @@
           v-for="item in items"
           :key="item.to"
           :to="item.to"
+          :data-tour="item.tour"
           class="flex items-center gap-4 rounded-xl px-4 py-4 text-[15px] font-medium text-text-primary transition-colors hover:bg-chip"
           @click="open = false"
         >
@@ -29,6 +31,7 @@
           <span class="flex-1">{{ item.label }}</span>
           <span
             v-if="item.badge"
+            data-tour="friend-requests"
             class="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-white"
           >
             {{ item.badge }}
@@ -40,20 +43,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { PlusIcon, XMarkIcon, UserIcon, UserGroupIcon } from '@heroicons/vue/24/outline'
 import { useContacts } from '../../assets/composables/Usecontacts'
+import { useTourStore } from '../../store/tour.ts'
 
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 const { pendingCount } = useContacts()
+const tour = useTourStore()
 
 const items = computed(() => [
-  { label: 'Add Friend', to: '/friends/add', icon: UserIcon, badge: pendingCount.value || null },
-  { label: 'Create Group', to: '/groups/create', icon: UserGroupIcon, badge: null },
+  { label: 'Add Friend', to: '/friends/add', icon: UserIcon, badge: pendingCount.value || null, tour: 'add-friend' },
+  { label: 'Create Group', to: '/groups/create', icon: UserGroupIcon, badge: null, tour: 'create-group' },
 ])
 
+// the product tour opens and closes this dropdown on its own steps
+watch(
+  () => tour.menuOpen,
+  (v) => {
+    open.value = v
+  },
+)
+
 const onDocClick = (e: MouseEvent) => {
+  if (tour.active) return // clicks on the tour tooltip must not close the menu
   if (!open.value || !root.value) return
   if (!e.composedPath().includes(root.value)) open.value = false
 }

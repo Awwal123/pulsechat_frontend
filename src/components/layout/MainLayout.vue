@@ -64,6 +64,7 @@
         v-for="t in tabs"
         :key="t.id"
         :to="t.to"
+        :data-tour="`tab-${t.id}`"
         class="flex flex-1 flex-col items-center gap-1.5 rounded-2xl py-2.5 text-xs font-medium transition-colors"
         :class="current === t.id
           ? 'bg-linear-to-b from-accent to-accent-dark text-white shadow-md'

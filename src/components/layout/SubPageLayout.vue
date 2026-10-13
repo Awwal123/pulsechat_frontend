@@ -1,7 +1,6 @@
 <template>
   <div class="flex min-h-screen flex-col bg-page">
     <header class="relative overflow-hidden rounded-br-[2.5rem] bg-linear-to-br from-header-from to-header-to px-4 py-4">
-      <!-- soft glow, like the design -->
       <div class="pointer-events-none absolute -right-8 top-0 h-24 w-24 rounded-full bg-white/10" />
       <div class="relative flex items-center">
         <button

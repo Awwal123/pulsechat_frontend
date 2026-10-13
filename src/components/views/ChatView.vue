@@ -8,11 +8,20 @@
     </div>
 
     <ul v-else-if="filteredChats.length" class="px-4 py-2">
-      <ChatRow v-for="chat in filteredChats" :key="chat.conversation_id" :chat="chat" />
+      <ChatRow
+        v-for="(chat, i) in filteredChats"
+        :key="chat.conversation_id"
+        :chat="chat"
+        :data-tour="i === 0 ? 'chat-item' : undefined"
+      />
     </ul>
 
     <!-- empty state: searching with no match, or no chats yet -->
-    <div v-else class="flex flex-col items-center px-8 pt-24 text-center">
+    <div
+      v-else
+      data-tour="chat-empty"
+      class="flex flex-col items-center px-8 pt-24 text-center"
+    >
       <p class="text-base font-semibold text-text-primary">
         {{ isSearching ? 'No chats found' : 'No conversations yet' }}
       </p>

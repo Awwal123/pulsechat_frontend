@@ -1,245 +1,240 @@
-<template>
-  <div
-    class="h-screen w-full flex flex-col bg-page overflow-hidden"
-    @touchstart="handleTouchStart"
-    @touchmove="handleTouchMove"
-    @touchend="handleTouchEnd"
-    @mousedown="handleMouseDown"
-    @mousemove="handleMouseMove"
-    @mouseup="handleMouseUp"
-    @mouseleave="handleMouseUp"
-  >
-    <div class="flex-1 flex flex-col items-center justify-center px-6 pt-8">
-      <img
-        :src="getCurrentSlide().image"
-        class="w-68 h-40 object-contain mb-4"
-        draggable="false"
-      />
-
-      <h2 class="text-3xl font-bold text-blue-500 text-center mb-2">
-        {{ getCurrentSlide().title }}
-      </h2>
-
-      <p class="text-blue-500 text-center text-md max-w-md leading-relaxed">
-        {{ getCurrentSlide().desc }}
-      </p>
-    </div>
-
-    <div class="relative flex-1 flex flex-col items-center justify-end pb-8">
-      <svg
-        class="absolute top-0 left-0 w-full"
-        viewBox="0 0 1440 200"
-        preserveAspectRatio="none"
-        style="height: 120px;"
-      >
-        <path
-          d="M0,100 Q360,50 720,100 T1440,100 L1440,200 L0,200 Z"
-          fill="#A0CDEB"
-          opacity="0.6"
-        />
-      </svg>
-
-      <svg
-        class="absolute top-16 left-0 w-full"
-        viewBox="0 0 1440 240"
-        preserveAspectRatio="none"
-        style="height: 140px;"
-      >
-        <path
-          d="M0,80 Q360,20 720,80 T1440,80 L1440,240 L0,240 Z"
-          fill="#8DC1E3"
-        />
-      </svg>
-
-      <div class="absolute inset-0 top-1/3 bg-linear-to-b from-header-from to-header-to"></div>
-
-      <button
-        class="relative z-10 bg-linear-to-r from-[#0891B2] to-[#0284C7] hover:from-[#0369A1] hover:to-[#0267AA] text-white font-semibold py-3 px-20 rounded-full shadow-lg mb-6 transition-all active:scale-95"
-        @click="getStarted"
-      >
-        Get started
-      </button>
-
-      <div class="relative z-10 flex items-center gap-2 mb-4">
-        <button
-          v-for="(item, index) in slides"
-          :key="index"
-          @click="current = index"
-          class="w-2.5 h-2.5 rounded-full transition-all duration-300 cursor-pointer"
-          :class="index === current ? 'bg-[#0891B2] w-8' : 'bg-[#3DB4D9]'"
-        ></button>
-      </div>
-
-      <div class="relative z-10 w-full flex justify-between px-8 text-sm">
-        <button
-          @click="skip"
-          class="text-[#0891B2] font-medium hover:opacity-80 transition-opacity"
-        >
-          Skip
-        </button>
-
-        <button
-          @click="next"
-          class="bg-[#B3D9F2] text-[#0891B2] font-medium px-5 py-2 rounded-full hover:bg-[#A0CDEB] transition-colors"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import Img1Light from "@/assets/images/Group-Light.png";
-import Img2Light from "@/assets/images/Video-Light.png";
-import Img3Light from "@/assets/images/Message-Light.png";
-import Img4Light from "@/assets/images/Cross-Light.png";
-
-import Img1Dark from "@/assets/images/Group-Dark.png";
-import Img2Dark from "@/assets/images/Video-Dark.png";
-import Img3Dark from "@/assets/images/Message-Dark.png";
-import Img4Dark from "@/assets/images/Cross-Dark.png";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
+import wordmarkLight from "@/assets/images/pulsechat-wordmark.svg";
+import wordmarkDark from "@/assets/images/pulsechat-wordmark-dark.svg";
 
 const router = useRouter();
+const GO_TO_NEXT_AT = 6000; // ms
 
-const current = ref(0);
-const isDarkMode = ref(false);
+// same shapes as pulsechat-icon.svg (512 grid)
+const BUBBLE =
+  "M168 96H344A72 72 0 0 1 416 168V272A72 72 0 0 1 344 344H252L186 405Q168 420 168 392V344A72 72 0 0 1 96 272V168A72 72 0 0 1 168 96Z";
+const PULSE = "M128 220H190L220 150L268 290L300 220H384";
+
+// theme: read the .dark class directly (does not depend on Tailwind's dark: variant)
+const isDark = ref(document.documentElement.classList.contains("dark"));
 let observer;
-let startX = 0;
-let currentX = 0;
-let isDragging = false;
-let dragOffset = 0;
-
-const slides = ref([
-  {
-    titleLight: "Group Chatting",
-    titleDark: "Group Chatting",
-    desc: "Connect with multiple members in group chats.",
-  },
-  {
-    titleLight: "Video And Voice Calls",
-    titleDark: "Video And Voice Calls",
-    desc: "Instantly connect via video and voice calls.",
-  },
-  {
-    titleLight: "Message Encryption",
-    titleDark: "Message Encryption",
-    desc: "Ensure privacy with encrypted messages.",
-  },
-  {
-    titleLight: "Fast Performance",
-    titleDark: "Fast Performance",
-    desc: "Lightning fast messaging experience.",
-  },
-]);
-
-
-const getCurrentSlide = () => {
-  const slide = slides.value[current.value];
-  const images = isDarkMode.value
-    ? [Img1Dark, Img2Dark, Img3Dark, Img4Dark]
-    : [Img1Light, Img2Light, Img3Light, Img4Light];
-
-  return {
-    image: images[current.value],
-    title: isDarkMode.value ? slide.titleDark : slide.titleLight,
-    desc: slide.desc,
-  };
-};
-
-
-const checkTheme = () => {
-  isDarkMode.value = document.documentElement.classList.contains("dark");
-};
+let timer;
 
 onMounted(() => {
-  checkTheme();
-
-
-  observer = new MutationObserver(checkTheme);
-
+  observer = new MutationObserver(() => {
+    isDark.value = document.documentElement.classList.contains("dark");
+  });
   observer.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["class"],
   });
 
+  timer = setTimeout(() => router.push("/onboarding2"), GO_TO_NEXT_AT);
 });
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   observer?.disconnect();
+  clearTimeout(timer);
 });
-
-const waveTopColor = () => (isDarkMode.value ? "#1F3A5F" : "#A0CDEB");
-const waveBottomColor = () => (isDarkMode.value ? "#16324F" : "#8DC1E3");
-const bottomFillColor = () => (isDarkMode.value ? "#16324F" : "#8DC1E3");
-
-const handleTouchStart = (e) => {
-  startX = e.touches[0].clientX;
-  isDragging = true;
-  dragOffset = 0;
-};
-
-const handleTouchMove = (e) => {
-  if (!isDragging) return;
-  currentX = e.touches[0].clientX;
-  dragOffset = currentX - startX;
-};
-
-const handleTouchEnd = () => {
-  isDragging = false;
-  handleDragEnd();
-};
-
-
-const handleMouseDown = (e) => {
-  startX = e.clientX;
-  isDragging = true;
-  dragOffset = 0;
-};
-
-const handleMouseMove = (e) => {
-  if (!isDragging) return;
-  currentX = e.clientX;
-  dragOffset = currentX - startX;
-};
-
-const handleMouseUp = () => {
-  isDragging = false;
-  handleDragEnd();
-};
-
-const handleDragEnd = () => {
-  const threshold = 50; // Minimum drag distance to trigger slide change
-
-  if (dragOffset > threshold) {
-    // Swiped/dragged right
-    if (current.value > 0) {
-      current.value--;
-    }
-  } else if (dragOffset < -threshold) {
-    // Swiped/dragged left
-    if (current.value < slides.value.length - 1) {
-      current.value++;
-    }
-  }
-};
-
-const next = () => {
-  if (current.value < slides.value.length - 1) {
-    current.value++;
-  } else {
-    getStarted();
-  }
-};
-
-
-const skip = () => {
-  current.value = slides.value.length - 1;
-};
-
-const getStarted = () => {
- router.replace("/signup/phone")
-};
 </script>
+
+<template>
+  <div
+    class="splash bg-page relative flex h-screen flex-col items-center justify-center overflow-hidden"
+  >
+    <!-- logo + glow + sonar rings -->
+    <div class="stage">
+      <span class="glow" />
+      <span class="ring ring-a" />
+      <span class="ring ring-b" />
+
+      <div class="logo">
+        <svg viewBox="0 0 512 512" class="h-full w-full" aria-hidden="true">
+          <defs>
+            <linearGradient id="splash-tile" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#2bbcf5" />
+              <stop offset="1" stop-color="#0a79b3" />
+            </linearGradient>
+          </defs>
+          <rect width="512" height="512" rx="116" fill="url(#splash-tile)" />
+          <path class="bubble" :d="BUBBLE" fill="#fff" />
+          <path
+            class="pulse"
+            :d="PULSE"
+            pathLength="1"
+            fill="none"
+            stroke="#0a8fc7"
+            stroke-width="24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <!-- name reveals left to right -->
+    <div class="wordmark">
+      <img
+        :src="isDark ? wordmarkDark : wordmarkLight"
+        alt="Pulse Chat"
+        class="h-9 w-auto"
+      />
+    </div>
+
+    <div class="absolute inset-x-0 bottom-10 text-center">
+      <p class="tagline text-[18px] font-semibold text-primary">
+        As fast as lightning,<br />
+        as delicious as thunder!
+      </p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.stage {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+
+/* soft light behind the logo */
+.glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(23, 162, 216, 0.26) 0%,
+    rgba(23, 162, 216, 0) 65%
+  );
+  animation: fade 1.4s ease-out 0.1s both;
+}
+
+/* 1. tile pops in  2. heartbeat starts */
+.logo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 14px 24px rgba(10, 121, 179, 0.35));
+  animation:
+    pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both,
+    beat 1.7s ease-in-out 2.6s infinite;
+}
+
+/* the bubble settles in, then the pulse line draws itself */
+.bubble {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+  animation: bubble-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s both;
+}
+.pulse {
+  stroke-dasharray: 1 2;
+  animation: draw 0.95s cubic-bezier(0.65, 0, 0.35, 1) 1.4s both;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 23%;
+  border: 2px solid var(--color-accent);
+  opacity: 0;
+  animation: ripple 2.6s ease-out infinite;
+}
+.ring-a {
+  animation-delay: 2.6s;
+}
+.ring-b {
+  animation-delay: 3.5s;
+}
+
+.wordmark {
+  margin-top: 34px;
+  animation: reveal 0.9s cubic-bezier(0.65, 0, 0.35, 1) 2s both;
+}
+
+.tagline {
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 2.9s both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1.05;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* lub-dub */
+@keyframes beat {
+  0%,
+  70%,
+  100% {
+    transform: scale(1);
+  }
+  14% {
+    transform: scale(1.07);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.045);
+  }
+}
+@keyframes ripple {
+  0% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.85);
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash *,
+  .splash *::before,
+  .splash *::after {
+    animation: none !important;
+  }
+}
+</style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css' // remove this line if your version says it can't resolve it (v1)
+import ProductTour from './components/layout/ProductTour.vue';
 
 if (localStorage.getItem('theme') === 'dark') {
   document.documentElement.classList.add('dark')
@@ -10,4 +11,5 @@ if (localStorage.getItem('theme') === 'dark') {
 <template>
   <Toaster position="top-center" rich-colors />
   <router-view />
+  <ProductTour />
 </template>
