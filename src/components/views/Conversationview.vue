@@ -21,7 +21,7 @@
         </button>
       </div>
 
-   
+      <!-- tapping the header of a group opens the members screen -->
       <div
         v-if="chat"
         class="flex items-center gap-3 border-b border-text-secondary/30 py-4"
@@ -58,6 +58,7 @@
       </div>
     </header>
 
+    <!-- not found (only after the chat list has really loaded) -->
     <div v-if="!chat" class="flex flex-1 flex-col items-center justify-center gap-4 bg-chat-bg px-8 text-center">
       <p v-if="!chatsStore.fetchedOnce" class="text-sm text-text-secondary">Loading...</p>
       <template v-else>
@@ -85,6 +86,7 @@
         </p>
 
         <template v-for="(m, i) in messages" :key="m.id">
+          <!-- group: other people's messages get their avatar and name -->
           <div v-if="isGroup && !chatsStore.isMine(m.sender_id)" class="flex items-end gap-2">
             <img
               v-if="showAvatar(i)"
@@ -112,6 +114,7 @@
             </div>
           </div>
 
+          <!-- private chats, and my own messages in groups -->
           <ChatBubble
             v-else
             :message="m"
@@ -250,6 +253,7 @@ const canSubmit = computed(
   () => !!draft.value.trim() && !chatsStore.mutating,
 )
 
+// ── header ──────────────────────────────────────────────
 const title = computed(() => (chat.value ? chatName(chat.value) : ''))
 const avatar = computed(() => (chat.value ? chatAvatar(chat.value) : null))
 
@@ -274,6 +278,7 @@ const openMembers = () => {
   if (isGroup.value) router.push(`/chats/${conversationId.value}/members`)
 }
 
+// ── group message helpers ───────────────────────────────
 const memberById = computed(() => new Map(members.value.map((m) => [m.id, m])))
 
 const senderName = (m: ChatMessage) =>
@@ -331,20 +336,21 @@ const fillScreen = async () => {
   }
 }
 
+// ── typing indicator ────────────────────────────────────
 const onInput = () => {
-  if (editing.value) return 
+  if (editing.value) return // no typing signal while editing an old message
   if (draft.value.trim()) chatsStore.sendTyping(conversationId.value)
   else chatsStore.sendStoppedTyping(conversationId.value)
 }
 
-
+// ── send / edit ─────────────────────────────────────────
 const submit = async () => {
   const text = draft.value.trim()
   if (!text || !chat.value || !canSubmit.value) return
 
   if (editing.value) {
     const target = editing.value
-    if (text === target.message) return cancelEdit() 
+    if (text === target.message) return cancelEdit() // nothing changed
     const ok = await chatsStore.editMessage(conversationId.value, target.id, text)
     if (ok) cancelEdit()
     return
@@ -356,7 +362,7 @@ const submit = async () => {
   if (!ok) draft.value = text
 }
 
-
+// ── action menu ─────────────────────────────────────────
 const openMenu = (message: ChatMessage, rect: DOMRect) => {
   const menuHeight = 110
   const below = rect.bottom + 8
@@ -386,6 +392,7 @@ const removeMessage = async () => {
   await chatsStore.deleteMessage(conversationId.value, target.id)
 }
 
+// ── load + keep in sync ─────────────────────────────────
 const syncReceipts = async () => {
   if (!chat.value) return
   await Promise.all([
@@ -398,12 +405,13 @@ const load = async () => {
   cancelEdit()
   chatsStore.activeConversationId = conversationId.value
   if (!chatsStore.fetchedOnce) await chatsStore.fetchChats()
-  else if (!chat.value) await chatsStore.fetchChats(true)
-  chatsStore.listenTo(conversationId.value) 
+  else if (!chat.value) await chatsStore.fetchChats(true) // e.g. a group that was just created
+  chatsStore.listenTo(conversationId.value) // no-op if already subscribed
   if (chat.value) {
-    if (chat.value.type === 'group') chatsStore.fetchMembers(conversationId.value)
+    if (chat.value.type === 'group') chatsStore.fetchMembers(conversationId.value) // not awaited, so messages load fast
     await chatsStore.fetchMessages(conversationId.value)
-    await syncReceipts()
+    // not awaited: don't make the chat wait for receipt requests before it scrolls down
+    syncReceipts().catch(() => {})
   }
   await scrollToBottom()
   await fillScreen()
@@ -437,6 +445,7 @@ watch(
   },
 )
 
+// switching conversations: stop typing in the old one, then load the new one
 watch(conversationId, (_new, old) => {
   if (old) chatsStore.sendStoppedTyping(old)
   load()
@@ -453,5 +462,6 @@ onBeforeUnmount(() => {
   if (chatsStore.activeConversationId === conversationId.value) {
     chatsStore.activeConversationId = null
   }
+  // note: we do NOT leave the channel here, so the chat list keeps receiving updates
 })
 </script>

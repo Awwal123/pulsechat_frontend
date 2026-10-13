@@ -421,6 +421,19 @@ export const useChatsStore = defineStore("chats", () => {
     whisperTyping(conversationId, false);
   }
 
+  // tell the other members, straight over the websocket, that I have read up to this
+  // message. Instant (no server round trip); the mark-as-read request saves it for real.
+  function whisperRead(conversationId: number, messageId: number) {
+    const channel = (echo.connector as any).pusher?.channel(
+      `private-conversation.${conversationId}`,
+    );
+    if (!channel?.subscribed) return; // not subscribed yet; the HTTP path still covers it
+    echo.private(`conversation.${conversationId}`).whisper("read", {
+      user_id: myId(),
+      message_id: messageId,
+    });
+  }
+
   // ── real-time ────────────────────────────────────────
   // Called for every `message.sent` event, for any conversation.
   function receiveMessage(raw: ChatMessage) {
@@ -452,12 +465,12 @@ export const useChatsStore = defineStore("chats", () => {
       activeConversationId.value === conversationId &&
       !document.hidden
     ) {
+      whisperRead(conversationId, msg.id); // the sender's tick flips instantly (websocket)
+      const seen = handledIncoming.get(conversationId);
+      seen?.add(msg.id); // so the view's own mark-as-read doesn't send it a second time
       messageService
-        .markAsRead(msg.id)
-        .then(() => handledIncoming.get(conversationId)?.add(msg.id))
-        .catch(() => {
-          /* the next markIncomingAsRead will retry it */
-        });
+        .markAsRead(msg.id) // the durable copy, saved on the server
+        .catch(() => seen?.delete(msg.id)); // failed: let markIncomingAsRead retry it
     }
 
     // 2) update the chat list
@@ -497,6 +510,15 @@ export const useChatsStore = defineStore("chats", () => {
           if (e.user_id === myId()) return; // ignore my own other devices
           setTyping(conversationId, e.user_id, e.name, e.typing);
         },
+      )
+      .listenForWhisper(
+        "read",
+        (e: { user_id: number; message_id: number }) =>
+          receiveRead({
+            conversation_id: conversationId,
+            message_id: e.message_id,
+            user_id: e.user_id,
+          }),
       );
   }
 
@@ -551,6 +573,9 @@ export const useChatsStore = defineStore("chats", () => {
       chat.unread_count = 0;
       return;
     }
+
+    // instant tick for the sender (websocket), before the requests below finish
+    whisperRead(conversationId, Math.max(...pending.map((m) => m.id)));
 
     const results = await Promise.allSettled(
       pending.map((m) => messageService.markAsRead(m.id)),
