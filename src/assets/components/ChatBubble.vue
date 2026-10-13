@@ -10,7 +10,6 @@
       @pointercancel="cancel"
       @contextmenu.prevent="open"
     >
-      <!-- reply quote -->
       <div
         v-if="message.reply_to"
         class="mb-1.5 rounded-lg border-l-4 px-2.5 py-1.5 text-xs"
@@ -88,8 +87,6 @@ const emit = defineEmits<{ (e: 'menu', message: ChatMessage, rect: DOMRect): voi
 
 const el = ref<HTMLElement | null>(null)
 let timer: number | undefined
-
-// only my own, already-sent, non-deleted messages get the Edit/Delete menu
 const canAct = computed(
   () => props.mine && !props.message.is_deleted && !props.message.pending,
 )

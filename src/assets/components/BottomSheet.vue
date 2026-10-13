@@ -3,7 +3,6 @@
     <Transition name="sheet">
       <div v-if="modelValue" class="fixed inset-0 z-50 flex items-end justify-center">
         <div class="absolute inset-0 bg-black/50" @click="close" />
-
         <section
           class="panel relative flex h-[92vh] w-full max-w-md flex-col rounded-t-3xl bg-sheet shadow-2xl"
           role="dialog"

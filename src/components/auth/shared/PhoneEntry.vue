@@ -14,8 +14,6 @@
             : 'We will send a code to the email on your account.'
         }}
       </p>
-
-      <!-- phone -->
       <label
         class="flex items-center gap-3 border-b-2 pb-2 transition-colors"
         :class="focused || digits ? 'border-accent/70' : 'border-ink'"
@@ -48,7 +46,6 @@
         />
       </label>
 
-      <!-- email (signup only) -->
       <div v-if="mode === 'register'" class="mt-8">
         <label
           class="flex items-center gap-3 border-b-2 pb-2 transition-colors"

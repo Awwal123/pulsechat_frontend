@@ -1,6 +1,5 @@
 <template>
   <header class="relative" :class="curved ? 'h-[297px]' : 'pb-[52px]'">
-    <!-- curved shell (idle / profile screens) -->
     <template v-if="curved">
       <div class="absolute inset-x-0 top-0 h-[297px] bg-wave" style="clip-path: ellipse(82% 100% at 50% 0)" />
       <div
@@ -8,14 +7,13 @@
         style="clip-path: ellipse(73% 100% at 50% 0)"
       />
     </template>
-    <!-- flat shell (typing / OTP screens) -->
+ 
     <template v-else>
       <div class="absolute inset-x-0 top-0 bottom-[52px] bg-linear-to-br from-header-from to-header-to" />
       <div class="absolute inset-x-0 bottom-0 h-[52px] bg-wave" />
     </template>
 
     <div class="relative z-10 px-6 pt-6 text-(--color-text-auth)" :class="curved ? '' : 'pb-8'">
-      <!-- top row -->
       <div class="flex items-center justify-between">
         <template v-if="mode === 'login'">
           <h1 class="text-[28px] font-bold tracking-wide">Login</h1>
@@ -34,7 +32,6 @@
         </template>
       </div>
 
-      <!-- headings -->
       <div v-if="heading" class="mt-5" :class="mode === 'register' ? 'text-right' : 'text-left'">
         <h2 class="max-w-[220px] text-[26px] leading-tight font-semibold tracking-wide" :class="mode === 'register' && 'ml-auto'">
           {{ heading }}

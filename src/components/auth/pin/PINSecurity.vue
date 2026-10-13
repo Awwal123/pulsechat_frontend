@@ -1,6 +1,5 @@
 <template>
   <div class="flex min-h-screen flex-col bg-page">
-    <!-- top bar -->
     <header class="relative flex items-center justify-center px-4 pt-6">
       <button
         type="button"
@@ -18,8 +17,6 @@
     <p class="mt-8 text-center text-sm text-ink">
       {{ mode === 'set' ? 'Protect your account with a secure PIN' : 'Enter your 4-digit PIN to continue' }}
     </p>
-
-    <!-- pin boxes -->
     <main class="flex-1 px-4 pt-8">
       <div class="flex justify-between gap-5">
         <input
@@ -41,7 +38,6 @@
       </div>
     </main>
 
-    <!-- actions -->
     <footer class="flex gap-4 px-4 pb-8">
       <button
         v-if="mode === 'set'"

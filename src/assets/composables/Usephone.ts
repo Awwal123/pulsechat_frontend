@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue'
 
-// module-level refs => state is shared between login and signup screens
-const digits = ref('') // raw digits only, e.g. "2012345629"
-const otpVerified = ref(false) // set after the signup OTP step succeeds
+
+const digits = ref('') 
+const otpVerified = ref(false) 
 const PHONE_LENGTH = 10
 
 export function usePhone() {

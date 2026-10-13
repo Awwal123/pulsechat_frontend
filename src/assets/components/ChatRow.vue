@@ -26,7 +26,6 @@
 </p>
     </div>
 
-    <!-- time on top, unread badge underneath -->
     <div class="flex shrink-0 flex-col items-end gap-1.5 self-stretch py-0.5">
       <span v-if="chat.last_message" class="text-xs font-semibold text-text-secondary">
         {{ formatChatTime(chat.last_message.created_at) }}

@@ -4,7 +4,7 @@ import { useContacts, type Person } from './Usecontacts'
 
 export interface Message {
   id: number
-  from: 'me' | number // 'me' or a contact id
+  from: 'me' | number 
   text: string
   time: string
 }
@@ -14,10 +14,10 @@ export interface Conversation {
   type: 'direct' | 'group'
   title: string
   subtitle: string
-  members: Person[] // the other people in the chat
+  members: Person[] 
 }
 
-// ── mock data: replace with API / websocket ──────────────────
+
 const groups: Record<string, { title: string; memberIds: number[] }> = {
   g1: { title: '🎮 Game 🎮', memberIds: [1, 2] },
 }
@@ -48,7 +48,7 @@ export function useConversation() {
 
   const personById = (id: number) => contacts.value.find((c) => c.id === id) ?? null
 
-  /** returns null when the id doesn't exist, so the view can show a "not found" state instead of a blank page */
+ 
   const getConversation = (id: string): Conversation | null => {
     const group = groups[id]
     if (group) {
@@ -68,7 +68,7 @@ export function useConversation() {
   const sendMessage = (id: string, text: string) => {
     const clean = text.trim()
     if (!clean) return
-    getMessages(id).push({ id: nextId++, from: 'me', text: clean, time: nowTime() }) // TODO: send via API/socket
+    getMessages(id).push({ id: nextId++, from: 'me', text: clean, time: nowTime() }) 
   }
 
   return { getConversation, getMessages, sendMessage, personById }
