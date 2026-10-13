@@ -1,7 +1,6 @@
 <template>
   <div class="flex min-h-screen flex-col bg-page">
     <AuthHeader mode="register" curved>
-      <!-- avatar -->
       <div class="mt-3 flex justify-center">
         <div class="relative h-[120px] w-[120px]">
           <img
@@ -111,7 +110,7 @@ const next = async () => {
   if (!canContinue.value || uploading.value) return
   if (avatarFile.value) {
     const ok = await signup.uploadAvatar(avatarFile.value)
-    if (!ok) return // the error toast already showed
+    if (!ok) return 
   }
   signup.name = name.value.trim()
   router.push('/pin/setpin')

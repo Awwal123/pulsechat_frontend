@@ -1,6 +1,5 @@
 <template>
   <div class="flex h-dvh flex-col bg-page">
-    <!-- Header (relative + z-30 so the + dropdown can overlap the page) -->
     <header
       class="relative z-30 flex items-center justify-between gap-3 bg-linear-to-br from-header-from to-header-to px-5 py-4 text-white"
     >
@@ -16,8 +15,6 @@
           class="hidden h-8 dark:block"
         />
       </div>
-
-      <!-- search pill -->
       <input
         v-else
         ref="searchInput"
@@ -47,8 +44,6 @@
         >
           <XMarkIcon class="h-6 w-6" />
         </button>
-
-        <!-- + button → dropdown: Add Friend / Create Group -->
         <PlusMenu v-if="!showSearchBar" />
       </div>
     </header>
@@ -58,7 +53,7 @@
       <slot />
     </div>
 
-    <!-- Bottom navigation -->
+
     <nav class="flex items-center gap-1 rounded-t-3xl bg-chip p-1.5">
       <RouterLink
         v-for="t in tabs"
@@ -92,13 +87,12 @@ import PlusMenu from './PlusMenu.vue';
 import { useSearch } from '../../assets/composables/Usesearch.ts';
 import { useChatsStore } from '../../store/chats.ts'
 import { onMounted } from 'vue'
-// optional: views may still pass :activeTab, otherwise it comes from the route
+
 const props = defineProps<{ activeTab?: string }>()
 const route = useRoute()
 const chatsStore = useChatsStore()
 
 onMounted(() => {
-  // fetchChats also subscribes to every conversation's channel
   if (!chatsStore.fetchedOnce && !chatsStore.loadingChats) chatsStore.fetchChats()
 })
 const tabs = [
@@ -110,8 +104,6 @@ const tabs = [
 const current = computed(
   () => props.activeTab ?? tabs.find((t) => route.path.startsWith(t.to))?.id ?? 'chats',
 )
-
-/* search: shared with the pages through useSearch() */
 const { query: searchQuery } = useSearch()
 
 const showSearchBar = ref(false)

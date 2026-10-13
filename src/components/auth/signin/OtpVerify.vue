@@ -11,9 +11,9 @@ const router = useRouter()
 
 const onVerified = (payload: VerifyOtpPayload) => {
   if (payload.requires_pin) {
-    router.push('/pin/verify') // user has a PIN, so ask for it
+    router.push('/pin/verify') 
   } else {
-    router.replace('/chats') // no PIN, so login is done
+    router.replace('/chats') 
   }
 }
 </script>

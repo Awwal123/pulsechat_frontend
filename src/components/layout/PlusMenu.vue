@@ -58,7 +58,7 @@ const items = computed(() => [
   { label: 'Create Group', to: '/groups/create', icon: UserGroupIcon, badge: null, tour: 'create-group' },
 ])
 
-// the product tour opens and closes this dropdown on its own steps
+
 watch(
   () => tour.menuOpen,
   (v) => {
@@ -67,7 +67,7 @@ watch(
 )
 
 const onDocClick = (e: MouseEvent) => {
-  if (tour.active) return // clicks on the tour tooltip must not close the menu
+  if (tour.active) return 
   if (!open.value || !root.value) return
   if (!e.composedPath().includes(root.value)) open.value = false
 }
